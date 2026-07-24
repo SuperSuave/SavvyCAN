@@ -273,6 +273,8 @@ uint64_t CANFrameModel::getCANFrameVal(QVector<CANFrame> *frames, int row, Colum
         for (int i = 0; i < std::min(frame.payload().length(), 8); i++) temp += (static_cast<uint64_t>(frame.payload()[i]) << (56 - (8 * i)));
         //qDebug() << temp;
         return temp;
+    case Column::Idx: ///< The frames original number --AI Helped Here
+        return static_cast<uint64_t>(frame.originalIndex);
     case Column::NUM_COLUMN:
         return 0;
     }
@@ -477,9 +479,20 @@ QVariant CANFrameModel::data(const QModelIndex &index, int role) const
         case Column::Remote:
         case Column::Length:
             return Qt::AlignHCenter;
+        case Column::Idx:
+            return Qt::AlignHCenter;
         default:
             return Qt::AlignLeft;
         }
+    }
+
+    if (index.column() == int(Column::Data))
+    {
+        if (role == RawPayloadRole)
+            return filteredFrames.at(index.row()).payload();
+
+        if (role == ChangedBytesRole)
+            return getChangedByteMaskForRow(index.row());
     }
 
     if (role == Qt::DisplayRole) {
@@ -598,6 +611,8 @@ QVariant CANFrameModel::data(const QModelIndex &index, int role) const
                 }
             }
             return tempString;
+        case Column::Idx: ///< The frames original number --AI Helped Here
+            return QString::number(thisFrame.originalIndex + 1);
         default:
             return tempString;
         }
@@ -636,6 +651,8 @@ QVariant CANFrameModel::headerData(int section, Qt::Orientation orientation,
             return QString(tr("ASCII"));
         case Column::Data:
             return QString(tr("Data"));
+        case Column::Idx: ///< The frames original number --AI Helped Here
+            return QString(tr("Original Frame ID"));
         default:
             return QString("");
         }
@@ -709,6 +726,7 @@ void CANFrameModel::addFrame(const CANFrame& frame, bool autoRefresh = false)
     {
         try
         {
+            tempFrame.originalIndex = frames.count(); ///< The frames original number --AI Helped Here
             frames.append(tempFrame);
 
             if (filters[tempFrame.frameId()] && busFilters[tempFrame.bus])
@@ -749,6 +767,7 @@ void CANFrameModel::addFrame(const CANFrame& frame, bool autoRefresh = false)
                 break;
             }
         }
+        tempFrame.originalIndex = frames.count(); ///< The frames original number --AI Helped Here
         frames.append(tempFrame);
         if (!found)
         {
@@ -905,21 +924,24 @@ void CANFrameModel::insertFrames(const QVector<CANFrame> &newFrames)
     int insertedFiltered = 0;
     for (int i = 0; i < newFrames.count(); i++)
     {
-        frames.append(newFrames[i]);
-        if (!filters.contains(newFrames[i].frameId()))
-        {
-            filters.insert(newFrames[i].frameId(), true);
+        CANFrame tempFrame = newFrames[i];
+        tempFrame.originalIndex = frames.count(); ///< The frames original number --AI Helped Here
+
+        frames.append(tempFrame);
+
+        if (!filters.contains(tempFrame.frameId())) {
+            filters.insert(tempFrame.frameId(), true);
             needFilterRefresh = true;
         }
-        if (filters[newFrames[i].frameId()])
-        {
-            busFilters.insert(newFrames[i].bus, true);
+
+        if (!busFilters.contains(tempFrame.bus)) {
+            busFilters.insert(tempFrame.bus, true);
             needFilterRefresh = true;
         }
-        if (filters[newFrames[i].frameId()] && busFilters[newFrames[i].bus])
-        {
+
+        if (filters[tempFrame.frameId()] && busFilters[tempFrame.bus]) {
             insertedFiltered++;
-            filteredFrames.append(newFrames[i]);
+            filteredFrames.append(tempFrame);
         }
     }
     lastUpdateNumFrames = newFrames.count();
@@ -930,19 +952,34 @@ void CANFrameModel::insertFrames(const QVector<CANFrame> &newFrames)
     if (needFilterRefresh) emit updatedFiltersList();
 }
 
+// Returns raw-frame row (same coordinate space as CANFrame::originalIndex),
+// not a filtered/model row.
 int CANFrameModel::getIndexFromTimeID(unsigned int ID, double timestamp)
 {
     int bestIndex = -1;
-    int64_t intTimeStamp = static_cast<int64_t> (timestamp * 1000000l);
+    const int64_t intTimeStamp = static_cast<int64_t>(timestamp * 1000000.0);
+
     for (int i = 0; i < frames.count(); i++)
     {
-        if ((frames[i].frameId() == ID))
-        {
-            if (frames[i].timeStamp().microSeconds() <= intTimeStamp) bestIndex = i;
-            else break; //drop out of loop as soon as we pass the proper timestamp
-        }
+        if (frames[i].frameId() != ID) continue;
+
+        if (frames[i].timeStamp().microSeconds() <= intTimeStamp)
+            bestIndex = i;
+        else
+            break;
     }
+
     return bestIndex;
+}
+
+int CANFrameModel::findFilteredRowByOriginalIndex(int originalIndex) const ///< The frames original number --AI Helped Here
+{
+    for (int i = 0; i < filteredFrames.count(); i++)
+    {
+        if (filteredFrames[i].originalIndex == originalIndex)
+            return i;
+    }
+    return -1;
 }
 
 void CANFrameModel::loadFilterFile(QString filename)
@@ -1000,6 +1037,60 @@ bool CANFrameModel::needsFilterRefresh()
     return temp;
 }
 
+QByteArray CANFrameModel::getRawPayloadForRow(int filteredRow) const
+{
+    if (filteredRow < 0 || filteredRow >= filteredFrames.count()) return QByteArray();
+    return filteredFrames[filteredRow].payload();
+}
+
+QByteArray CANFrameModel::getChangedByteMaskForRow(int filteredRow) const
+{
+    QByteArray mask;
+
+    if (filteredRow < 0 || filteredRow >= filteredFrames.count()) return mask;
+
+    const CANFrame &current = filteredFrames[filteredRow];
+    const QByteArray currentPayload = current.payload();
+    const int dataLen = currentPayload.size();
+    if (dataLen <= 0) return mask;
+
+    mask.fill(char(0), dataLen);
+
+    int sourceIdx = current.originalIndex;
+    if (sourceIdx <= 0 || sourceIdx >= frames.count()) return mask;
+
+    const CANFrame *previous = nullptr;
+
+    for (int i = sourceIdx - 1; i >= 0; --i)
+    {
+        const CANFrame &candidate = frames[i];
+        if (candidate.bus != current.bus) continue;
+        if (candidate.frameId() != current.frameId()) continue;
+        if (candidate.frameType() != QCanBusFrame::DataFrame) continue;
+
+        previous = &candidate;
+        break;
+    }
+
+    if (!previous) return mask;
+
+    const QByteArray previousPayload = previous->payload();
+    const int compareLen = qMin(currentPayload.size(), previousPayload.size());
+
+    for (int i = 0; i < compareLen; ++i)
+    {
+        if (currentPayload[i] != previousPayload[i])
+            mask[i] = 1;
+    }
+
+    for (int i = compareLen; i < currentPayload.size(); ++i)
+    {
+        mask[i] = 1;
+    }
+
+    return mask;
+}
+
 /*
  *This used to not be const correct but it is now. So, there's little harm in
  * allowing external code to peek at our frames. There's just no touching.
@@ -1010,6 +1101,12 @@ bool CANFrameModel::needsFilterRefresh()
 const QVector<CANFrame>* CANFrameModel::getListReference() const
 {
     return &frames;
+}
+
+const CANFrame* CANFrameModel::getFilteredFrameRef(int row) const
+{
+    if (row < 0 || row >= filteredFrames.count()) return nullptr;
+    return &filteredFrames[row];
 }
 
 const QVector<CANFrame>* CANFrameModel::getFilteredListReference() const

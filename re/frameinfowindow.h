@@ -32,6 +32,7 @@ private slots:
     void mousePress();
     void mouseWheel();
     void mouseDoubleClick();
+    void applyPlotTheme(QCustomPlot*);
 
 private:
     Ui::FrameInfoWindow *ui;
@@ -44,7 +45,7 @@ private:
     const QVector<CANFrame> *modelFrames;
     bool useOpenGL;
     bool useHexTicker;
-    static const QColor byteGraphColors[8];
+    static QColor byteGraphColorForIndex(int idx);
     static QPen bytePens[8];
     DBCHandler *dbcHandler;
 

@@ -7,8 +7,14 @@
 #include "filterutility.h"
 #include "qcpaxistickerhex.h"
 
-const QColor FrameInfoWindow::byteGraphColors[8] = {Qt::blue, Qt::green,  Qt::black, Qt::red, //0 1 2 3
-                                                    Qt::gray, Qt::darkYellow, Qt::cyan,  Qt::darkMagenta}; //4 5 6 7
+#include "themes/thememanager.h"
+
+QColor FrameInfoWindow::byteGraphColorForIndex(int idx)
+{
+    const auto tc = ThemeManager::colors();
+    return tc.trace[idx % 8];
+}
+
 QPen FrameInfoWindow::bytePens[8];
 
 const int numIntervalHistBars = 20;
@@ -56,6 +62,8 @@ FrameInfoWindow::FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *paren
     ui->gridUpper->setRowMinimumHeight(0, 20);
     ui->gridUpper->setRowStretch(0, 1);
     ui->gridUpper->setRowStretch(1, 10);
+
+    applyPlotTheme(graphHistogram);
 
     graphHistogram->setInteractions(QCP::iRangeDrag | QCP::iRangeZoom | QCP::iSelectAxes |
                                     QCP::iSelectLegend);
@@ -117,7 +125,7 @@ FrameInfoWindow::FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *paren
 
     for (int i = 0; i < 8; i++)
     {
-        bytePens[i].setColor(byteGraphColors[i]);
+        bytePens[i].setColor(byteGraphColorForIndex(i));
         bytePens[i].setWidth(1);
     }
 
@@ -127,6 +135,8 @@ FrameInfoWindow::FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *paren
     connect(ui->timeHistogram, SIGNAL(mouseWheel(QWheelEvent*)), this, SLOT(mouseWheel()));
 
     dbcHandler = DBCHandler::getReference();
+
+    applyPlotTheme(ui->timeHistogram);
 }
 
 void FrameInfoWindow::setupByteGraph(QCustomPlot *plot, int num)
@@ -165,6 +175,7 @@ void FrameInfoWindow::setupByteGraph(QCustomPlot *plot, int num)
     connect(plot, SIGNAL(mousePress(QMouseEvent*)), this, SLOT(mousePress()));
     connect(plot, SIGNAL(mouseWheel(QWheelEvent*)), this, SLOT(mouseWheel()));
     connect(plot, &QCustomPlot::mouseDoubleClick, this, &FrameInfoWindow::mouseDoubleClick);
+    applyPlotTheme(plot);
 }
 
 void FrameInfoWindow::mousePress()
@@ -242,19 +253,17 @@ void FrameInfoWindow::showEvent(QShowEvent* event)
 
 bool FrameInfoWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::KeyRelease) {
+    if (event->type() == QEvent::KeyRelease)
+    {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        switch (keyEvent->key())
+        if (keyEvent->key() == Qt::Key_F1)
         {
-        case Qt::Key_F1:
             HelpWindow::getRef()->showHelp("framedetails.md");
-            break;
+            return true;
         }
-        return true;
-    } else {
-        // standard event processing
-        return QObject::eventFilter(obj, event);
     }
+
+    return QObject::eventFilter(obj, event);
 }
 
 FrameInfoWindow::~FrameInfoWindow()
@@ -793,8 +802,8 @@ void FrameInfoWindow::updateDetailsWindow(QString newID)
         graphHistogram->addGraph();
         graphHistogram->graph()->setData(histGraphX, histGraphY);
         graphHistogram->graph()->setLineStyle(QCPGraph::lsStepLeft); //connect points with lines
-        QBrush graphBrush;
-        graphBrush.setColor(Qt::red);
+        const auto tc = ThemeManager::colors();
+        QBrush graphBrush(tc.trace[0]);
         graphBrush.setStyle(Qt::SolidPattern);
         graphHistogram->graph()->setPen(Qt::NoPen);
         graphHistogram->graph()->setBrush(graphBrush);
@@ -818,10 +827,10 @@ void FrameInfoWindow::updateDetailsWindow(QString newID)
         ui->timeHistogram->graph()->setData(timeGraphX, timeGraphY);
         ui->timeHistogram->graph()->setLineStyle(QCPGraph::lsStepLeft); //connect points with lines
         //QBrush graphBrush;
-        graphBrush.setColor(Qt::red);
-        graphBrush.setStyle(Qt::SolidPattern);
+        QBrush timeBrush(tc.trace[0]);
+        timeBrush.setStyle(Qt::SolidPattern);
         ui->timeHistogram->graph()->setPen(Qt::NoPen);
-        ui->timeHistogram->graph()->setBrush(graphBrush);
+        ui->timeHistogram->graph()->setBrush(timeBrush);
         //ui->timeHistogram->yAxis->setRange(0, maxTimeCounter * 1.1);
         //ui->timeHistogram->xAxis->setRange(minInterval / 1000.0, maxInterval / 1000.0); //graph is in ms while intervals are in us
         ui->timeHistogram->axisRect()->setupFullAxesBox();
@@ -911,3 +920,38 @@ void FrameInfoWindow::dumpNode(QTreeWidgetItem* item, QFile *file, int indent)
 }
 
 
+void FrameInfoWindow::applyPlotTheme(QCustomPlot *plot)
+{
+    const QPalette pal = this->palette();
+    const QColor bg = pal.color(QPalette::Base);
+    const QColor fg = pal.color(QPalette::Text);
+    const QColor grid(fg.red(), fg.green(), fg.blue(), 60);
+
+    plot->setBackground(QBrush(bg));
+    plot->axisRect()->setBackground(QBrush(bg));
+
+    plot->xAxis->setBasePen(QPen(fg));
+    plot->yAxis->setBasePen(QPen(fg));
+    plot->xAxis->setTickPen(QPen(fg));
+    plot->yAxis->setTickPen(QPen(fg));
+    plot->xAxis->setSubTickPen(QPen(fg));
+    plot->yAxis->setSubTickPen(QPen(fg));
+    plot->xAxis->setTickLabelColor(fg);
+    plot->yAxis->setTickLabelColor(fg);
+    plot->xAxis->setLabelColor(fg);
+    plot->yAxis->setLabelColor(fg);
+
+    plot->xAxis->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+    plot->yAxis->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+    plot->xAxis->grid()->setSubGridVisible(false);
+    plot->yAxis->grid()->setSubGridVisible(false);
+
+    if (plot->legend)
+    {
+        plot->legend->setTextColor(fg);
+        plot->legend->setBorderPen(QPen(grid));
+        plot->legend->setBrush(QBrush(bg));
+    }
+
+    plot->replot();
+}

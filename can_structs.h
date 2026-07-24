@@ -15,6 +15,8 @@ public:
     bool isReceived; //did we receive this or send it?
     uint64_t timedelta;
     uint32_t frameCount; //used in overwrite mode
+    int originalIndex; // keep track of original frame number
+
 
     friend bool operator<(const CANFrame& l, const CANFrame& r)
     {
@@ -32,6 +34,7 @@ public:
         isReceived = true;
         timedelta = 0;
         frameCount = 1;
+        originalIndex = -1;
     }
 };
 

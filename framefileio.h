@@ -15,6 +15,8 @@
 #include "can_structs.h"
 #include "utility.h"
 
+class BookmarkManager;
+
 class FrameFileIO: public QObject
 {
     Q_OBJECT
@@ -26,13 +28,14 @@ public:
     //The QString returns the filename that was selected and so is really a sort of return value
     //The QVector is used as either the target for loading or the source for saving.
     //These routines call the below loading/saving functions so no need to use them directly if you don't want.
-    static bool loadFrameFile(QString &, QVector<CANFrame>*);
-    static bool saveFrameFile(QString &, const QVector<CANFrame>*);
+    static bool loadFrameFile(QString &, QVector<CANFrame>*, BookmarkManager* bookmarkManager = nullptr);
+    static bool saveFrameFile(QString &, const QVector<CANFrame>*, const BookmarkManager* bookmarkManager = nullptr);
 
     //These do the actual loading and saving and can be used directly if you'd prefer
-    static bool autoDetectLoadFile(QString, QVector<CANFrame>*);
+    static bool autoDetectLoadFile(QString, QVector<CANFrame>*, BookmarkManager* bookmarkManager = nullptr);
     static bool loadCRTDFile(QString, QVector<CANFrame>*);
-    static bool loadNativeCSVFile(QString, QVector<CANFrame>*);
+    static bool loadNativeCSVFile(QString filename, QVector<CANFrame>* frames,
+                                    BookmarkManager* bookmarkManager = nullptr);
     static bool loadGenericCSVFile(QString, QVector<CANFrame>*);
     static bool loadLogFile(QString, QVector<CANFrame>*);
     static bool loadMicrochipFile(QString, QVector<CANFrame>*);
@@ -84,7 +87,8 @@ public:
     static bool isWiresharkSocketCANFile(QString filename);
 
     static bool saveCRTDFile(QString, const QVector<CANFrame>*);
-    static bool saveNativeCSVFile(QString, const QVector<CANFrame>*);
+    static bool saveNativeCSVFile(QString filename, const QVector<CANFrame>* frames,
+                                   const BookmarkManager* bookmarkManager = nullptr);
     static bool saveGenericCSVFile(QString, const QVector<CANFrame>*);
     static bool saveLogFile(QString, const QVector<CANFrame>*);
     static bool saveMicrochipFile(QString, const QVector<CANFrame>*);

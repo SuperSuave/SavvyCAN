@@ -1,22 +1,64 @@
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+#include "bookmarkmanager.h"
+#include "bookmarkmanagerdialog.h"
 #include "can_structs.h"
+#include <QClipboard>
+#include <QShortcut>
 #include <QDateTime>
 #include <QFileDialog>
+#include <QDockWidget>
+#include <QFormLayout>
+#include <QGroupBox>
+#include <QLabel>
+#include <QPlainTextEdit>
+#include <QVBoxLayout>
+#include <QItemSelectionModel>
+#include <QSpinBox>
 #include <QtSerialPort/QSerialPortInfo>
 #include "connections/canconmanager.h"
 #include "connections/connectionwindow.h"
 #include "helpwindow.h"
 #include "utility.h"
 #include "filterutility.h"
+#include "framebytedatadelegate.h"
 
-#include <QClipboard>
+
 /*
 Some notes on things I'd like to put into the program but haven't put on github (yet)
 
 Allow scripts to read/write signals from DBC files
 allow scripts to load DBC files in support of the script - maybe the graphing system too.
 */
+
+static QString normalizedBookmarkLabel(const QString &tag)
+{
+    QString finalLabel = tag.trimmed();
+    if (finalLabel.isEmpty()) finalLabel = "Bookmark";
+    return finalLabel;
+}
+
+class NumericTableWidgetItem : public QTableWidgetItem
+{
+public:
+    NumericTableWidgetItem(double value, const QString &text)
+        : QTableWidgetItem(text), numericValue(value)
+    {
+    }
+
+    bool operator<(const QTableWidgetItem &other) const override
+    {
+        const NumericTableWidgetItem *otherItem =
+                dynamic_cast<const NumericTableWidgetItem *>(&other);
+        if (otherItem)
+            return numericValue < otherItem->numericValue;
+
+        return QTableWidgetItem::operator<(other);
+    }
+
+private:
+    double numericValue = 0.0;
+};
 
 QString MainWindow::loadedFileName = "";
 MainWindow *MainWindow::selfRef = nullptr;
@@ -31,6 +73,16 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
+
+    QShortcut *bookmarkShortcut = new QShortcut(QKeySequence(Qt::Key_F2), this);
+    bookmarkShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    bookmarkShortcut->setAutoRepeat(false);
+    connect(bookmarkShortcut, &QShortcut::activated, this, &MainWindow::triggerTimedDiscoveryBookmark);
+
+    autoBookmarkTimer = new QTimer(this);
+    autoBookmarkTimer->setSingleShot(true);
+    connect(autoBookmarkTimer, &QTimer::timeout, this, &MainWindow::autoBookmarkTimeoutExpired);
+
 #if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
     qRegisterMetaTypeStreamOperators<QVector<QString>>();
     qRegisterMetaTypeStreamOperators<QVector<int>>();
@@ -44,10 +96,26 @@ MainWindow::MainWindow(QWidget *parent) :
 
     model = new CANFrameModel(this); // set parent to mainwindow to prevent canframemodel to change thread (might be done by setModel but just in case)
 
-    QSortFilterProxyModel* proxyModel = new QSortFilterProxyModel;
+    proxyModel = new QSortFilterProxyModel(this);
     proxyModel->setSourceModel(model);
-
     ui->canFramesView->setModel(proxyModel);
+
+    ui->canFramesView->setItemDelegateForColumn(int(Column::Data), new FrameByteDataDelegate(ui->canFramesView));
+
+    connect(ui->canFramesView->selectionModel(), &QItemSelectionModel::currentRowChanged, this, &MainWindow::updateInspectDock);
+
+    bookmarkManager = new BookmarkManager(this);
+    bookmarkDialog = new BookmarkManagerDialog(bookmarkManager, this);
+
+    QAction *analyzeBookmarkAction = new QAction(tr("Analyze Around Bookmark"), this);
+
+    connect(analyzeBookmarkAction, &QAction::triggered, this, &MainWindow::analyzeCurrentBookmarkOrSelection);
+
+    if (ui->menu_RE_Tools)
+    {
+        ui->menu_RE_Tools->addSeparator();
+        ui->menu_RE_Tools->addAction(analyzeBookmarkAction);
+    }
 
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
@@ -80,7 +148,6 @@ MainWindow::MainWindow(QWidget *parent) :
     frameSenderWindow = nullptr;
     dbcMainEditor = nullptr;
     comparatorWindow = nullptr;
-    settingsDialog = nullptr;
     udsFirmwareUploaderWindow = nullptr;
     discreteStateWindow = nullptr;
     connectionWindow = nullptr;
@@ -167,10 +234,27 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->btnNormalize, &QAbstractButton::clicked, this, &MainWindow::normalizeTiming);
     connect(ui->btnFilterAll, &QAbstractButton::clicked, this, &MainWindow::filterSetAll);
     connect(ui->btnFilterNone, &QAbstractButton::clicked, this, &MainWindow::filterClearAll);
+    connect(ui->frameFilterSearch, &QLineEdit::textChanged, this, &MainWindow::filterFrameFilterList);
     connect(ui->btnExpandAll, &QAbstractButton::clicked, this, &MainWindow::expandAllRows);
     connect(ui->btnCollapseAll, &QAbstractButton::clicked, this, &MainWindow::collapseAllRows);
 
     connect(ui->tableSimpleSender, SIGNAL(cellChanged(int,int)), this, SLOT(onSenderCellChanged(int,int)));
+
+    // Bookmark Connectors
+    connect(bookmarkDialog, &BookmarkManagerDialog::jumpToBookmarkRequested,
+            this, &MainWindow::jumpToBookmark);
+    connect(bookmarkDialog, &BookmarkManagerDialog::deleteBookmarkRequested,
+            this, &MainWindow::deleteBookmarkByIndex);
+    connect(ui->actionBookmarkEditor, &QAction::triggered,
+            this, &MainWindow::showBookmarksWindow);
+    connect(ui->checkBoxAlternateLabels, &QCheckBox::toggled,
+            this, [this](bool checked) {
+                quickBookmarkUseAlternatingLabels = checked;
+                resetQuickBookmarkToggle();
+                quickBookmarkAlternateState = false;
+            });
+
+    connect(ui->checkBoxAutoBookmark, &QCheckBox::toggled, this, &MainWindow::setAutoBookmarkNewIdsActive);
 
     lbStatusConnected.setText(tr("Connected to 0 buses"));
     lbHelp.setText(tr("Press F1 on any screen for help"));
@@ -201,7 +285,7 @@ MainWindow::MainWindow(QWidget *parent) :
     elapsedTime->start();
 
     isConnected = false;
-    allowCapture = true;
+    allowCapture = false;
 
     //create a temporary frame to be able to capture the correct
     //default height of an item in the table. Need to do this in case
@@ -257,6 +341,7 @@ MainWindow::MainWindow(QWidget *parent) :
     frameSender->startSending(); //start the timer in the object so enabled things can send
 
     installEventFilter(this);
+
 }
 
 MainWindow::~MainWindow()
@@ -353,25 +438,52 @@ void MainWindow::closeEvent(QCloseEvent *event)
     event->accept();
 }
 
+bool MainWindow::getSelectedFrameInfo(CANFrame &outFrame, QModelIndex *outIndex)
+{
+    if (!ui || !ui->canFramesView) return false;
+
+    QModelIndex proxyIndex = ui->canFramesView->currentIndex();
+    if (!proxyIndex.isValid()) return false;
+
+    auto proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
+    if (!proxy) return false;
+
+    QModelIndex sourceIndex = proxy->mapToSource(proxyIndex);
+    if (!sourceIndex.isValid()) return false;
+
+    const CANFrame *frame = model->getFilteredFrameRef(sourceIndex.row());
+    if (!frame) return false;
+
+    outFrame = *frame;
+    if (outIndex) *outIndex = sourceIndex;
+    return true;
+}
+
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::KeyRelease) {
+    Q_UNUSED(obj);
+
+    if (event->type() == QEvent::KeyPress || event->type() == QEvent::KeyRelease)
+    {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
+
+        if (keyEvent->isAutoRepeat())
+            return true;
+
         switch (keyEvent->key())
         {
         case Qt::Key_F1:
-            HelpWindow::getRef()->showHelp("mainscreen.md");
+            if (event->type() == QEvent::KeyRelease)
+                HelpWindow::getRef()->showHelp("mainscreen.md");
             return true;
+
+        default:
             break;
         }
-        return false;
-    } else {
-        // standard event processing
-        return QObject::eventFilter(obj, event);
     }
-    return false;
-}
 
+    return QMainWindow::eventFilter(obj, event);
+}
 
 void MainWindow::updateSettings()
 {
@@ -401,6 +513,25 @@ void MainWindow::readSettings()
     {
         ui->cbAutoScroll->setChecked(true);
     }
+
+    ui->btnCaptureToggle->setText("Restart Capture");
+
+    quickBookmarkLabel = "Bookmark";
+    quickBookmarkAlternateLabel = "Alternate Bookmark";
+    quickBookmarkUseAlternatingLabels = false;
+    quickBookmarkAlternateState = false;
+
+    ui->quickBookmarkLabel->setText(quickBookmarkLabel);
+    ui->quickBookmarkAlternateLabel->setText(quickBookmarkAlternateLabel);
+
+    ui->checkBoxAlternateLabels->blockSignals(true);
+    ui->checkBoxAlternateLabels->setChecked(false);
+    ui->checkBoxAlternateLabels->blockSignals(false);
+
+    settings.remove("Main/QuickBookmarkLabel");
+    settings.remove("Main/QuickBookmarkAlternateLabel");
+    settings.remove("Main/QuickBookmarkUseAlternatingLabels");
+
     int fontSize = settings.value("Main/FontSize", 9).toUInt();
     QFont newFont = QFont(ui->canFramesView->font());
     newFont.setPointSize(fontSize);
@@ -469,6 +600,7 @@ void MainWindow::writeSettings()
         settings.setValue("Main/AsciiColumn", ui->canFramesView->columnWidth(7));
         //settings.setValue("Main/DataColumn", ui->canFramesView->columnWidth(8));
     }
+
 }
 
 void MainWindow::onSenderCellChanged(int row, int col)
@@ -738,27 +870,37 @@ void MainWindow::gridClicked(QModelIndex idx)
     }
 }
 
-void MainWindow::gridDoubleClicked(QModelIndex idx)
+void MainWindow::gridDoubleClicked(const QModelIndex &idx)
 {
     qDebug() << "Grid double clicked";
-    //grab ID and timestamp and send them away
-    CANFrame frame = model->getListReference()->at(idx.row());
-    emit sendCenterTimeID(frame.frameId(), frame.timeStamp().microSeconds() / 1000000.0);
+    if (!idx.isValid()) return;
+
+    auto proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
+    if (!proxy) return;
+
+    QModelIndex sourceIndex = proxy->mapToSource(idx);
+    if (!sourceIndex.isValid()) return;
+
+    const CANFrame *frame = model->getFilteredFrameRef(sourceIndex.row());
+    if (!frame) return;
+
+    emit sendCenterTimeID(frame->frameId(), frame->timeStamp().microSeconds() / 1000000.0);
 }
 
 void MainWindow::gridContextMenuRequest(QPoint pos)
 {
-    QModelIndex idx = ui->canFramesView->indexAt(pos); //figure out where in the view we clicked (row, column)
-    qDebug() << "Pos: " << pos << " Row :" << idx.row() << " Col: " << idx.column();
-
+    QModelIndex idx = ui->canFramesView->indexAt(pos);
+    qDebug() << "Pos" << pos << " Row " << idx.row() << " Col " << idx.column();
     if (!idx.isValid()) return;
 
     QMenu *menu = new QMenu(this);
     menu->setAttribute(Qt::WA_DeleteOnClose);
 
     menu->addAction(copyAct);
+    menu->addSeparator();
+    menu->addAction(tr("Analyze Around This Frame"), this, &MainWindow::analyzeCurrentBookmarkOrSelection);
 
-    if (idx.column() == 8) //we're over the DATA column
+    if (idx.column() == 8) // DATA column
     {
         contextMenuPosition = pos;
         menu->addSeparator();
@@ -1017,11 +1159,31 @@ void MainWindow::filterClearAll()
     }
     inhibitFilterUpdate = false;
     model->setAllFilters(false);
+    MainWindow::clearInspectDock();
+}
+
+void MainWindow::filterFrameFilterList(const QString &text)
+{
+    const QString needle = text.trimmed();
+
+    for (int i = 0; i < ui->listFilters->count(); ++i)
+    {
+        QListWidgetItem *item = ui->listFilters->item(i);
+        if (!item) continue;
+
+        const bool match = needle.isEmpty() ||
+                           item->text().contains(needle, Qt::CaseInsensitive);
+
+        item->setHidden(!match);
+    }
 }
 
 void MainWindow::logReceivedFrame(CANConnection* conn, QVector<CANFrame> frames)
 {
     Q_UNUSED(conn);
+
+    processAutoBookmarks(frames);
+
     if (continuousLogging)
     {
         FrameFileIO::writeContinuousNative(&frames, 0);
@@ -1112,13 +1274,29 @@ void MainWindow::addFrameToDisplay(CANFrame &frame, bool autoRefresh = false)
 
 //A sub-window is sending us a center on timestamp and ID signal
 //try to find the relevant frame in the list and focus on it.
+
 void MainWindow::gotCenterTimeID(uint32_t ID, double timestamp)
 {
-    int idx = model->getIndexFromTimeID(ID, timestamp);
-    if (idx > -1)
-    {
-        ui->canFramesView->selectRow(idx);
-    }
+    if (!model) return;
+
+    const int rawRow = model->getIndexFromTimeID(ID, timestamp);
+    if (rawRow < 0) return;
+
+    const int filteredRow = model->findFilteredRowByOriginalIndex(rawRow);
+    if (filteredRow < 0) return; // frame exists in raw list but is hidden by filters
+
+    auto *proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
+    if (!proxy) return;
+
+    const QModelIndex sourceIndex = model->index(filteredRow, 0);
+    if (!sourceIndex.isValid()) return;
+
+    const QModelIndex proxyIndex = proxy->mapFromSource(sourceIndex);
+    if (!proxyIndex.isValid()) return;
+
+    ui->canFramesView->setCurrentIndex(proxyIndex);
+    ui->canFramesView->selectRow(proxyIndex.row());
+    ui->canFramesView->scrollTo(proxyIndex, QAbstractItemView::PositionAtCenter);
 }
 
 void MainWindow::clearFrames()
@@ -1146,7 +1324,7 @@ void MainWindow::handleLoadFile()
 
     QMessageBox::StandardButton confirmDialog;
 
-    bool loadResult = FrameFileIO::loadFrameFile(filename, &tempFrames);
+    bool loadResult = FrameFileIO::loadFrameFile(filename, &tempFrames, bookmarkManager);
 
     if (!loadResult)
     {
@@ -1185,10 +1363,20 @@ void MainWindow::handleDroppedFile(const QString &filename)
     progress.setRange(0,0);
     progress.setMinimumDuration(0);
     progress.show();
-    
+
     QVector<CANFrame> loadedFrames;
-    bool loadResult = FrameFileIO::autoDetectLoadFile(filename, &loadedFrames);
-    
+    bool loadResult = false;
+
+    if (FrameFileIO::isNativeCSVFile(filename))
+    {
+        loadResult = FrameFileIO::loadNativeCSVFile(filename, &loadedFrames, bookmarkManager);
+    }
+    else
+    {
+        loadResult = FrameFileIO::autoDetectLoadFile(filename, &loadedFrames);
+        if (loadResult && bookmarkManager) bookmarkManager->clear();
+    }
+
     progress.cancel();
     
     if (!loadResult)
@@ -1220,12 +1408,11 @@ void MainWindow::handleDroppedFile(const QString &filename)
     }
 }
 
-
 void MainWindow::handleSaveFile()
 {
     QString filename;
 
-    if (FrameFileIO::saveFrameFile(filename, model->getListReference()))
+    if (FrameFileIO::saveFrameFile(filename, model->getListReference(), bookmarkManager))
     {
         loadedFileName = filename;
         updateFileStatus();
@@ -1253,7 +1440,7 @@ void MainWindow::handleSaveFilteredFile()
 {
     QString filename;
 
-    if (FrameFileIO::saveFrameFile(filename, model->getFilteredListReference()))
+    if (FrameFileIO::saveFrameFile(filename, model->getFilteredListReference(), nullptr))
     {
         loadedFileName = filename;
         updateFileStatus();
@@ -1929,4 +2116,1486 @@ void MainWindow::showConnectionSettingsWindow()
         connectionWindow = new ConnectionWindow();
     }
     connectionWindow->show();
+}
+
+/// All AI Suggestions Below
+
+void MainWindow::addBookmarkSmart(const QString &tag)
+{
+    if (allowCapture)
+        addBookmarkAtTail(tag);
+    else
+        addBookmarkAtCurrentSelection(tag);
+}
+
+void MainWindow::addBookmarkAtCurrentSelection()
+{
+    addBookmarkAtCurrentSelection(quickBookmarkLabel);
+}
+
+void MainWindow::addBookmarkAtCurrentSelection(const QString &tag)
+{
+    if (!bookmarkManager || !model) return;
+
+    QModelIndex sourceIndex;
+    CANFrame frame;
+    if (!getSelectedFrameInfo(frame, &sourceIndex)) return;
+
+    FrameBookmark bookmark;
+    bookmark.originalIndex = frame.originalIndex;
+    bookmark.frameId = frame.frameId();
+    bookmark.bus = frame.bus;
+    bookmark.timestampMicros = frame.timeStamp().microSeconds();
+
+    QString finalLabel = tag.trimmed();
+    if (finalLabel.isEmpty()) finalLabel = tr("Bookmark");
+    bookmark.label = finalLabel;
+    bookmark.note.clear();
+
+    bookmarkManager->addBookmark(bookmark);
+    if (bookmarkDialog) bookmarkDialog->refreshBookmarksView();
+    statusBar()->showMessage(tr("Added %1 Bookmark").arg(finalLabel), 3000);
+}
+
+void MainWindow::addBookmarkAtTail(const QString &tag)
+{
+    if (!bookmarkManager || !model) return;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || frames->isEmpty()) {
+        statusBar()->showMessage(tr("No frames to bookmark"), 1500);
+        return;
+    }
+
+    const CANFrame &frame = frames->last();
+
+    FrameBookmark bm;
+    bm.originalIndex = frame.originalIndex;
+    bm.bus = frame.bus;
+    bm.frameId = frame.frameId();
+    bm.timestampMicros = frame.timeStamp().microSeconds();
+
+    QString finalLabel = tag.trimmed();
+    if (finalLabel.isEmpty()) finalLabel = tr("Bookmark");
+    bm.label = finalLabel;
+    bm.note.clear();
+
+    bookmarkManager->addBookmark(bm);
+    if (bookmarkDialog) bookmarkDialog->refreshBookmarksView();
+    statusBar()->showMessage(tr("Bookmark added: %1").arg(finalLabel), 1500);
+}
+
+void MainWindow::jumpToBookmark(int bookmarkIndex)
+{
+    if (!bookmarkManager || !model) return;
+    if (bookmarkIndex < 0 || bookmarkIndex >= bookmarkManager->getBookmarks().size()) return;
+
+    const FrameBookmark bm = bookmarkManager->getBookmarks().at(bookmarkIndex);
+    if (!selectFrameByOriginalIndex(bm.originalIndex))
+    {
+        statusBar()->showMessage(tr("Bookmarked frame could not be found or is hidden by filters"), 2500);
+    }
+}
+
+bool MainWindow::selectFrameByOriginalIndex(int originalIndex)
+{
+    if (!model || originalIndex < 0) return false;
+
+    const int filteredRow = model->findFilteredRowByOriginalIndex(originalIndex);
+    if (filteredRow < 0) return false;
+
+    auto *proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
+    if (!proxy) return false;
+
+    const QModelIndex sourceIndex = model->index(filteredRow, 0);
+    if (!sourceIndex.isValid()) return false;
+
+    const QModelIndex proxyIndex = proxy->mapFromSource(sourceIndex);
+    if (!proxyIndex.isValid()) return false;
+
+    ui->canFramesView->setCurrentIndex(proxyIndex);
+    ui->canFramesView->selectRow(proxyIndex.row());
+    ui->canFramesView->scrollTo(proxyIndex, QAbstractItemView::PositionAtCenter);
+    return true;
+}
+
+void MainWindow::jumpToOriginalIndex()
+{
+    CANFrame frame;
+    QModelIndex sourceIndex;
+    if (!getSelectedFrameInfo(frame, &sourceIndex)) return;
+
+    if (!selectFrameByOriginalIndex(frame.originalIndex)) return;
+}
+
+void MainWindow::copyOriginalIndex()
+{
+    CANFrame frame;
+    QModelIndex sourceIndex;
+    if (!getSelectedFrameInfo(frame, &sourceIndex)) return;
+
+    QClipboard *clipboard = QApplication::clipboard();
+    if (!clipboard) return;
+
+    clipboard->setText(QString::number(frame.originalIndex +1));
+}
+
+void MainWindow::deleteBookmarkByIndex(int bookmarkIndex)
+{
+    Q_UNUSED(bookmarkIndex);
+}
+
+void MainWindow::showBookmarksWindow()
+{
+    if (!bookmarkDialog) return;
+
+    bookmarkDialog->refreshBookmarksView();
+    bookmarkDialog->show();
+    bookmarkDialog->raise();
+    bookmarkDialog->activateWindow();
+}
+
+void MainWindow::triggerTimedDiscoveryBookmark()
+{
+    triggerQuickBookmark();
+
+    if (ui->checkBoxAutoBookmark && ui->checkBoxAutoBookmark->isChecked()) {
+        armAutoBookmarkWindow(autoBookmarkDurationMs);
+    }
+}
+
+void MainWindow::triggerQuickBookmark()
+{
+    QString tag;
+
+    if (quickBookmarkUseAlternatingLabels)
+    {
+        tag = quickBookmarkAlternateState
+            ? normalizedBookmarkLabel(quickBookmarkAlternateLabel)
+            : normalizedBookmarkLabel(quickBookmarkLabel);
+
+        quickBookmarkAlternateState = !quickBookmarkAlternateState;
+    }
+    else
+    {
+        tag = normalizedBookmarkLabel(quickBookmarkLabel);
+    }
+
+    addBookmarkSmart(tag);
+    statusBar()->showMessage(tr("Bookmark added: %1").arg(tag), 1500);
+}
+
+void MainWindow::resetQuickBookmarkToggle()
+{
+    quickBookmarkAlternateState = false;
+    statusBar()->showMessage(
+        tr("Quick bookmark toggle reset to %1")
+            .arg(normalizedBookmarkLabel(quickBookmarkLabel)),
+        1500);
+}
+
+void MainWindow::armAutoBookmarkWindow(int durationMs)
+{
+    autoBookmarkSeenIds.clear();
+    autoBookmarkNewIdsActive = true;
+    autoBookmarkTimer->start(durationMs);
+
+    statusBar()->showMessage(
+        tr("Discovering new IDs for %1 ms").arg(durationMs), 1000);
+}
+
+void MainWindow::autoBookmarkTimeoutExpired()
+{
+    setAutoBookmarkNewIdsActive(false);
+}
+
+void MainWindow::setAutoBookmarkNewIdsActive(bool enabled)
+{
+    autoBookmarkNewIdsActive = enabled;
+
+    if (!enabled)
+    {
+        autoBookmarkTimer->stop();
+        autoBookmarkSeenIds.clear();
+    }
+
+    if (ui->checkBoxAutoBookmark && ui->checkBoxAutoBookmark->isChecked() != enabled)
+        ui->checkBoxAutoBookmark->setChecked(enabled);
+
+    if (ui->checkBoxAutoBookmark && ui->checkBoxAutoBookmark->isChecked() != enabled)
+        ui->checkBoxAutoBookmark->setChecked(enabled);
+
+    statusBar()->showMessage(
+        enabled ? tr("Discover New IDs armed")
+                : tr("Discover New IDs disarmed"), 1500);
+}
+
+quint64 MainWindow::makeAutoBookmarkKey(const CANFrame &frame) const
+{
+    return (static_cast<quint64>(static_cast<quint32>(frame.bus)) << 32) |
+           static_cast<quint64>(frame.frameId());
+}
+
+
+bool MainWindow::findLatestFrameByBusAndId(int bus, uint32_t frameId, CANFrame &outFrame) const
+{
+    if (!model) return false;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || frames->isEmpty()) return false;
+
+    for (int i = frames->size() - 1; i >= 0; --i)
+    {
+        const CANFrame &frame = frames->at(i);
+        if (frame.bus == bus && frame.frameId() == frameId)
+        {
+            outFrame = frame;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void MainWindow::processAutoBookmarks(const QVector<CANFrame> &frames)
+{
+    if (!autoBookmarkNewIdsActive || !bookmarkManager) return;
+
+    bool addedAny = false;
+
+    for (const CANFrame &incomingFrame : frames)
+    {
+        const quint64 key = makeAutoBookmarkKey(incomingFrame);
+        if (autoBookmarkSeenIds.contains(key)) continue;
+
+        autoBookmarkSeenIds.insert(key);
+
+        CANFrame storedFrame;
+        if (!findLatestFrameByBusAndId(incomingFrame.bus, incomingFrame.frameId(), storedFrame))
+            continue;
+
+        FrameBookmark bm;
+        bm.originalIndex = storedFrame.originalIndex;
+        bm.bus = storedFrame.bus;
+        bm.frameId = storedFrame.frameId();
+        bm.timestampMicros =
+                static_cast<qint64>(storedFrame.timeStamp().seconds()) * 1000000LL +
+                static_cast<qint64>(storedFrame.timeStamp().microSeconds());
+        bm.label = tr("NEW ID 0x%1 BUS %2")
+                .arg(storedFrame.frameId(), 0, 16)
+                .arg(storedFrame.bus);
+        bm.note.clear();
+
+        bookmarkManager->addBookmark(bm);
+        addedAny = true;
+    }
+
+    if (addedAny)
+    {
+        if (bookmarkDialog)
+            bookmarkDialog->refreshBookmarksView();
+
+        statusBar()->showMessage(tr("Discovered new CAN IDs"), 1500);
+    }
+}
+
+
+MainWindow::FrameKey MainWindow::makeFrameKey(const CANFrame &frame) const
+{
+    FrameKey key;
+    key.bus = frame.bus;
+    key.frameId = frame.frameId();
+    key.extended = frame.hasExtendedFrameFormat();
+    return key;
+}
+
+MainWindow::BookmarkAnalysisResult MainWindow::analyzeBookmarkEvent(
+        int originalIndex,
+        int sameIdRadius,
+        int crossIdWindowBefore,
+        int crossIdWindowAfter) const
+{
+    BookmarkAnalysisResult result;
+    result.originalIndex = originalIndex;
+    result.sameIdRadius = sameIdRadius;
+    result.crossIdWindowBefore = crossIdWindowBefore;
+    result.crossIdWindowAfter = crossIdWindowAfter;
+
+    if (!model) return result;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames) return result;
+    if (originalIndex < 0 || originalIndex >= frames->size()) return result;
+
+    const CANFrame &anchor = frames->at(originalIndex);
+    result.anchorFrame = anchor;
+    if (anchor.frameType() != QCanBusFrame::DataFrame) return result;
+
+    result.sameIdCandidates =
+            analyzeSameIdAroundBookmark(*frames, originalIndex, sameIdRadius);
+
+    result.crossIdCandidates =
+            analyzeCrossIdAroundBookmark(*frames, originalIndex,
+                                         crossIdWindowBefore, crossIdWindowAfter);
+
+    return result;
+}
+
+void MainWindow::accumulateCrossIdEventFrame(
+        CrossIdEventStats &stats,
+        const CANFrame &frame,
+        bool isBeforeSide) const
+{
+    const QByteArray payload = frame.payload();
+
+    if (isBeforeSide)
+    {
+        stats.beforeCount++;
+        if (stats.hasLastBefore && stats.lastBeforePayload != payload)
+            stats.beforePayloadTransitions++;
+        stats.lastBeforePayload = payload;
+        stats.hasLastBefore = true;
+    }
+    else
+    {
+        stats.afterCount++;
+        if (stats.hasLastAfter && stats.lastAfterPayload != payload)
+            stats.afterPayloadTransitions++;
+        stats.lastAfterPayload = payload;
+        stats.hasLastAfter = true;
+    }
+}
+
+void MainWindow::analyzeCurrentBookmarkOrSelection()
+{
+    CANFrame frame;
+    QModelIndex sourceIndex;
+    if (!getSelectedFrameInfo(frame, &sourceIndex))
+    {
+        statusBar()->showMessage(tr("Select a frame first"), 2000);
+        return;
+    }
+
+    const int originalIndex = frame.originalIndex;
+    if (originalIndex < 0)
+    {
+        statusBar()->showMessage(tr("Invalid original frame index"), 2000);
+        return;
+    }
+
+    QSettings settings;
+    int sameIdRadius = settings.value("Analysis/SameIdRadius", 5).toInt();
+    int crossIdBefore = settings.value("Analysis/CrossIdWindowBefore", 300).toInt();
+    int crossIdAfter = settings.value("Analysis/CrossIdWindowAfter", 300).toInt();
+
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Bookmark Analysis Settings"));
+    dlg.setModal(true);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dlg);
+
+    QLabel *intro = new QLabel(
+        tr("Choose how much context to inspect around the selected event."), &dlg);
+    intro->setWordWrap(true);
+    mainLayout->addWidget(intro);
+
+    QFormLayout *form = new QFormLayout();
+
+    QSpinBox *sameIdSpin = new QSpinBox(&dlg);
+    sameIdSpin->setRange(1, 5000);
+    sameIdSpin->setValue(sameIdRadius);
+    sameIdSpin->setToolTip(tr("How many matching frames of the same ID to inspect before and after the event."));
+
+    QSpinBox *crossBeforeSpin = new QSpinBox(&dlg);
+    crossBeforeSpin->setRange(1, 50000);
+    crossBeforeSpin->setValue(crossIdBefore);
+    crossBeforeSpin->setToolTip(tr("How many nearby raw frames to inspect before the event for other IDs."));
+
+    QSpinBox *crossAfterSpin = new QSpinBox(&dlg);
+    crossAfterSpin->setRange(1, 50000);
+    crossAfterSpin->setValue(crossIdAfter);
+    crossAfterSpin->setToolTip(tr("How many nearby raw frames to inspect after the event for other IDs."));
+
+    form->addRow(tr("Same-ID radius:"), sameIdSpin);
+    form->addRow(tr("Cross-ID before:"), crossBeforeSpin);
+    form->addRow(tr("Cross-ID after:"), crossAfterSpin);
+
+    mainLayout->addLayout(form);
+
+    QLabel *note = new QLabel(
+        tr("Suggested starting point: Same-ID radius 5, Cross-ID before/after 300."),
+        &dlg);
+    note->setWordWrap(true);
+    mainLayout->addWidget(note);
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    mainLayout->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted)
+        return;
+
+    sameIdRadius = sameIdSpin->value();
+    crossIdBefore = crossBeforeSpin->value();
+    crossIdAfter = crossAfterSpin->value();
+
+    settings.setValue("Analysis/SameIdRadius", sameIdRadius);
+    settings.setValue("Analysis/CrossIdWindowBefore", crossIdBefore);
+    settings.setValue("Analysis/CrossIdWindowAfter", crossIdAfter);
+
+    const BookmarkAnalysisResult result =
+        analyzeBookmarkEvent(originalIndex, sameIdRadius, crossIdBefore, crossIdAfter);
+
+    if (result.sameIdCandidates.isEmpty() && result.crossIdCandidates.isEmpty())
+    {
+        statusBar()->showMessage(tr("No analysis results found around this frame"), 2500);
+        return;
+    }
+
+    showBookmarkAnalysisDialog(result);
+}
+
+QVector<MainWindow::CrossIdCandidate> MainWindow::analyzeCrossIdAroundBookmark(
+        const QVector<CANFrame> &frames,
+        int originalIndex,
+        int windowBefore,
+        int windowAfter) const
+{
+    QVector<CrossIdCandidate> out;
+    if (originalIndex < 0 || originalIndex >= frames.size()) return out;
+
+    const CANFrame anchor = frames.at(originalIndex);
+    if (anchor.frameType() != QCanBusFrame::DataFrame) return out;
+
+    const FrameKey anchorKey = makeFrameKey(anchor);
+    QHash<FrameKey, CrossIdEventStats> eventStats;
+
+    const int start = qMax(0, originalIndex - windowBefore);
+    const int end = qMin(frames.size() - 1, originalIndex + windowAfter);
+
+    for (int i = start; i <= end; i++)
+    {
+        if (i == originalIndex) continue;
+
+        const CANFrame frame = frames.at(i);
+        if (frame.frameType() != QCanBusFrame::DataFrame) continue;
+
+        const FrameKey key = makeFrameKey(frame);
+        if (key == anchorKey) continue;
+
+        CrossIdEventStats &stats = eventStats[key];
+        stats.key = key;
+        accumulateCrossIdEventFrame(stats, frame, i < originalIndex);
+    }
+
+    for (auto it = eventStats.constBegin(); it != eventStats.constEnd(); ++it)
+    {
+        const FrameKey key = it.key();
+        const CrossIdEventStats &stats = it.value();
+
+        const FrameIdleStats *idleStats = nullptr;
+        auto idleIt = idleBaseline.constFind(key);
+        if (idleIt != idleBaseline.constEnd())
+            idleStats = &idleIt.value();
+
+        const CrossIdScoreFeatures features =
+                buildCrossIdScoreFeatures(stats, idleStats, windowBefore, windowAfter);
+
+        const int payloadChangeCount =
+                stats.beforePayloadTransitions + stats.afterPayloadTransitions;
+
+        CrossIdCandidate c;
+        c.key = key;
+        c.beforeCount = stats.beforeCount;
+        c.afterCount = stats.afterCount;
+        c.totalEventCount = stats.beforeCount + stats.afterCount;
+        c.payloadChangeCount = payloadChangeCount;
+
+        c.appearanceShift = features.appearanceShift;
+        c.payloadVolatility = features.payloadVolatility;
+        c.idleStability = features.idleStability;
+        c.idleNoise = qBound(0.0, 1.0 - features.idleStability, 1.0);
+
+        c.appearedOnlyAfter = (features.exclusiveAfter > 0.5);
+        c.disappearedAfter = (features.exclusiveBefore > 0.5);
+
+        c.score = scoreCrossIdCandidate(features);
+        out.append(c);
+    }
+
+    std::sort(out.begin(), out.end(), [](const CrossIdCandidate &a, const CrossIdCandidate &b) {
+        if (a.score != b.score) return a.score > b.score;
+        if (a.idleNoise != b.idleNoise) return a.idleNoise < b.idleNoise;
+        if (a.appearedOnlyAfter != b.appearedOnlyAfter) return a.appearedOnlyAfter && !b.appearedOnlyAfter;
+        if (a.afterCount != b.afterCount) return a.afterCount > b.afterCount;
+        if (a.key.bus != b.key.bus) return a.key.bus < b.key.bus;
+        return a.key.frameId < b.key.frameId;
+    });
+
+    return out;
+}
+
+QString MainWindow::describeFlipStrength(double score) const
+{
+    if (score >= 9.0) return tr("very likely related");
+    if (score >= 7.0) return tr("likely related");
+    if (score >= 5.0) return tr("possibly related");
+    if (score >= 3.5) return tr("weak match");
+    return tr("unlikely / noisy");
+}
+
+QString MainWindow::describeIdleNoise(double idleNoise) const
+{
+    if (idleNoise <= 0.02) return tr("usually stable");
+    if (idleNoise <= 0.10) return tr("changes a little during normal driving");
+    return tr("changes often during normal driving");
+}
+
+QString MainWindow::describeSameIdReason(const FlipCandidate &c) const
+{
+    QStringList reasons;
+
+    if (c.supportScore >= 0.80)
+        reasons << tr("strong support on both sides of event");
+    else if (c.supportScore >= 0.45)
+        reasons << tr("moderate support near event");
+    else
+        reasons << tr("limited support near event");
+
+    if (c.localStability >= 0.85)
+        reasons << tr("stable before/after values");
+    else if (c.localStability >= 0.55)
+        reasons << tr("some local variation");
+    else
+        reasons << tr("noisy near event");
+
+    if (c.eventFlipCount <= 1)
+        reasons << tr("clean transition");
+    else if (c.eventFlipCount <= 3)
+        reasons << tr("a few nearby flips");
+    else
+        reasons << tr("many nearby flips");
+
+    return reasons.join(tr(", "));
+}
+
+QString MainWindow::describeCrossIdReason(const CrossIdCandidate &c) const
+{
+    QStringList reasons;
+
+    if (c.appearedOnlyAfter)
+        reasons << tr("appears only after event");
+    else if (c.disappearedAfter)
+        reasons << tr("present before but missing after");
+    else if (c.appearanceShift >= 0.50)
+        reasons << tr("much more active after event");
+    else if (c.appearanceShift >= 0.20)
+        reasons << tr("slightly more active after event");
+    else
+        reasons << tr("similar activity on both sides");
+
+    if (c.payloadVolatility >= 0.75)
+        reasons << tr("payload changes a lot");
+    else if (c.payloadVolatility >= 0.35)
+        reasons << tr("payload changes somewhat");
+    else
+        reasons << tr("payload mostly stable");
+
+    if (c.totalEventCount <= 2)
+        reasons << tr("rare around event");
+    else if (c.totalEventCount >= 8)
+        reasons << tr("frequent around event");
+
+    return reasons.join(tr(", "));
+}
+
+QVector<MainWindow::FlipCandidate> MainWindow::analyzeSameIdAroundBookmark(
+        const QVector<CANFrame> &frames,
+        int originalIndex,
+        int sameIdRadius) const
+{
+    QVector<FlipCandidate> empty;
+    if (originalIndex < 0 || originalIndex >= frames.size()) return empty;
+
+    const CANFrame anchor = frames.at(originalIndex);
+    if (anchor.frameType() != QCanBusFrame::DataFrame) return empty;
+
+    const FrameKey anchorKey = makeFrameKey(anchor);
+    QHash<FrameKey, EventFrameStats> eventStats;
+
+    int beforeFound = 0;
+    for (int i = originalIndex - 1; i >= 0 && beforeFound < sameIdRadius; --i)
+    {
+        const CANFrame frame = frames.at(i);
+        if (frame.frameType() != QCanBusFrame::DataFrame) continue;
+        if (!(makeFrameKey(frame) == anchorKey)) continue;
+
+        EventFrameStats &stats = eventStats[anchorKey];
+        stats.key = anchorKey;
+        accumulateEventFrame(stats, frame, true);
+        beforeFound++;
+    }
+
+    int afterFound = 0;
+    for (int i = originalIndex + 1; i < frames.size() && afterFound < sameIdRadius; ++i)
+    {
+        const CANFrame frame = frames.at(i);
+        if (frame.frameType() != QCanBusFrame::DataFrame) continue;
+        if (!(makeFrameKey(frame) == anchorKey)) continue;
+
+        EventFrameStats &stats = eventStats[anchorKey];
+        stats.key = anchorKey;
+        accumulateEventFrame(stats, frame, false);
+        afterFound++;
+    }
+
+    return rankFlipCandidates(eventStats, sameIdRadius);
+}
+
+void MainWindow::accumulateEventFrame(EventFrameStats &stats, const CANFrame &frame, bool isBeforeSide) const
+{
+    const int dlc = qMin(frame.payload().size(), 64);
+    if (isBeforeSide) stats.matchedFramesBefore++;
+    else stats.matchedFramesAfter++;
+
+    for (int i = 0; i < dlc; i++)
+    {
+        EventByteStats &b = stats.bytes[i];
+        const quint8 value = static_cast<quint8>(frame.payload().at(i));
+
+        if (isBeforeSide)
+        {
+            if (!b.hasBeforeValue)
+            {
+                b.beforeValue = value;
+                b.hasBeforeValue = true;
+            }
+
+            if (b.hasLastBeforeSeen && b.lastBeforeSeen != value)
+                b.beforeTransitions++;
+
+            b.lastBeforeSeen = value;
+            b.hasLastBeforeSeen = true;
+            b.beforeCount++;
+        }
+        else
+        {
+            if (!b.hasAfterValue)
+            {
+                b.afterValue = value;
+                b.hasAfterValue = true;
+            }
+
+            if (b.hasLastAfterSeen && b.lastAfterSeen != value)
+                b.afterTransitions++;
+
+            b.lastAfterSeen = value;
+            b.hasLastAfterSeen = true;
+            b.afterCount++;
+        }
+    }
+}
+
+QVector<MainWindow::FlipCandidate> MainWindow::rankFlipCandidates(
+        const QHash<FrameKey, EventFrameStats> &eventStats,
+        int sameIdRadius) const
+{
+    QVector<FlipCandidate> out;
+
+    for (auto it = eventStats.constBegin(); it != eventStats.constEnd(); ++it)
+    {
+        const FrameKey key = it.key();
+        const EventFrameStats &stats = it.value();
+
+        auto idleIt = idleBaseline.constFind(key);
+        const FrameIdleStats *idleStats = nullptr;
+        if (idleIt != idleBaseline.constEnd())
+            idleStats = &idleIt.value();
+
+        for (int byteIdx = 0; byteIdx < 64; byteIdx++)
+        {
+            const EventByteStats &eb = stats.bytes[byteIdx];
+            if (!eb.hasBeforeValue || !eb.hasAfterValue) continue;
+            if (eb.beforeValue == eb.afterValue) continue;
+
+            double rawIdleNoise = 0.0;
+            const ByteIdleStats *idleByteStats = nullptr;
+            if (idleStats && idleStats->bytes[byteIdx].samples > 1)
+            {
+                idleByteStats = &idleStats->bytes[byteIdx];
+                rawIdleNoise = double(idleByteStats->changes) /
+                               double(qMax(1, idleByteStats->samples - 1));
+            }
+
+            const double windowConfidence = clamp01(
+                safeRatio(
+                    static_cast<double>(qMin(stats.matchedFramesBefore, stats.matchedFramesAfter)),
+                    static_cast<double>(qMax(1, sameIdRadius))
+                )
+            );
+
+            SameIdScoreFeatures features = buildSameIdScoreFeatures(eb, idleByteStats, sameIdRadius);
+            features.windowConfidence = windowConfidence;
+
+            const double score = scoreSameIdCandidate(features);
+
+            FlipCandidate c;
+            c.key = key;
+            c.byteIndex = byteIdx;
+            c.beforeValue = eb.beforeValue;
+            c.afterValue = eb.afterValue;
+            c.beforeCount = eb.beforeCount;
+            c.afterCount = eb.afterCount;
+            c.eventFlipCount = eb.beforeTransitions + eb.afterTransitions;
+            c.supportScore = features.supportScore;
+            c.localStability = features.localStability;
+            c.localNoise = qBound(0.0, 1.0 - features.localStability, 1.0);
+            c.idleStability = features.idleStability;
+            c.idleNoise = rawIdleNoise;
+            c.score = score;
+
+            out.append(c);
+        }
+    }
+
+    std::sort(out.begin(), out.end(), [](const FlipCandidate &a, const FlipCandidate &b) {
+        if (a.score != b.score) return a.score > b.score;
+        if (a.idleNoise != b.idleNoise) return a.idleNoise < b.idleNoise;
+        if (a.key.bus != b.key.bus) return a.key.bus < b.key.bus;
+        if (a.key.frameId != b.key.frameId) return a.key.frameId < b.key.frameId;
+        return a.byteIndex < b.byteIndex;
+    });
+
+    return out;
+}
+
+MainWindow::SameIdScoreFeatures MainWindow::buildSameIdScoreFeatures(
+        const EventByteStats &eb,
+        const ByteIdleStats *idleByteStats,
+        int sameIdRadius) const
+{
+    SameIdScoreFeatures f;
+    f.eventDelta = (eb.hasBeforeValue && eb.hasAfterValue && eb.beforeValue != eb.afterValue) ? 1.0 : 0.0;
+    f.supportScore = computeSameIdSupportScore(eb, sameIdRadius);
+    f.localStability = computeSameIdLocalStability(eb);
+
+    // Idle is optional. If no baseline exists, do not reward or penalize.
+    f.idleStability = (idleByteStats && idleByteStats->samples > 1)
+            ? computeSameIdIdleStability(idleByteStats)
+            : 0.0;
+
+    return f;
+}
+
+double MainWindow::clamp01(double value)
+{
+    if (value < 0.0) return 0.0;
+    if (value > 1.0) return 1.0;
+    return value;
+}
+
+double MainWindow::safeRatio(double num, double denom)
+{
+    if (denom <= 0.0) return 0.0;
+    return num / denom;
+}
+
+double MainWindow::computeSameIdSupportScore(const EventByteStats &eb, int sameIdRadius) const
+{
+    const double support = static_cast<double>(qMin(eb.beforeCount, eb.afterCount));
+    return clamp01(safeRatio(support, static_cast<double>(qMax(1, sameIdRadius))));
+}
+
+double MainWindow::computeSameIdLocalStability(const EventByteStats &eb) const
+{
+    const int transitionCount = eb.beforeTransitions + eb.afterTransitions;
+    const int opportunityCount =
+        qMax(0, eb.beforeCount - 1) +
+        qMax(0, eb.afterCount - 1);
+
+    const double localNoise = clamp01(safeRatio(static_cast<double>(transitionCount),
+                                                static_cast<double>(qMax(1, opportunityCount))));
+    return 1.0 - localNoise;
+}
+
+double MainWindow::computeSameIdIdleStability(const ByteIdleStats *idleByteStats) const
+{
+    if (!idleByteStats) return 0.0;
+    if (idleByteStats->samples <= 1) return 0.0;
+
+    const double idleNoise = clamp01(
+        safeRatio(static_cast<double>(idleByteStats->changes),
+                  static_cast<double>(idleByteStats->samples - 1)));
+    return 1.0 - idleNoise;
+}
+
+double MainWindow::scoreSameIdCandidate(const SameIdScoreFeatures &f) const
+{
+    const double raw =
+            (3.5 * f.eventDelta) +
+            (2.0 * f.supportScore) +
+            (3.0 * f.localStability) +
+            (0.0 * f.idleStability);
+
+    return raw * (0.5 + 0.5 * clamp01(f.windowConfidence));
+}
+
+
+MainWindow::CrossIdScoreFeatures MainWindow::buildCrossIdScoreFeatures(
+        const CrossIdEventStats &stats,
+        const FrameIdleStats *idleStats,
+        int windowBefore,
+        int windowAfter) const
+{
+    CrossIdScoreFeatures f;
+    f.appearanceShift = computeCrossIdAppearanceShift(stats, windowBefore, windowAfter);
+    f.exclusiveAfter = (stats.beforeCount == 0 && stats.afterCount > 0) ? 1.0 : 0.0;
+    f.exclusiveBefore = (stats.beforeCount > 0 && stats.afterCount == 0) ? 1.0 : 0.0;
+    f.payloadVolatility = computeCrossIdPayloadVolatility(stats);
+
+    // Idle is optional. If no baseline exists, it contributes nothing.
+    f.idleStability = (idleStats != nullptr) ? computeCrossIdIdleStability(idleStats) : 0.0;
+    return f;
+}
+
+double MainWindow::scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const
+{
+    return (3.0 * f.appearanceShift) +
+           (0.75 * f.exclusiveAfter) +
+           (0.25 * f.exclusiveBefore) +
+           (1.5 * f.payloadVolatility) +
+           (0.0 * f.idleStability);
+}
+
+double MainWindow::scoreCrossIdCandidate(const CrossIdEventStats &stats,
+                                         const FrameIdleStats *idleStats,
+                                         int windowBefore,
+                                         int windowAfter) const
+{
+    const CrossIdScoreFeatures f = buildCrossIdScoreFeatures(stats, idleStats, windowBefore, windowAfter);
+    return scoreCrossIdCandidate(f);
+}
+
+double MainWindow::computeCrossIdAppearanceShift(const CrossIdEventStats &stats,
+                                                 int windowBefore,
+                                                 int windowAfter) const
+{
+    const double beforeRate = static_cast<double>(stats.beforeCount) / static_cast<double>(qMax(1, windowBefore));
+    const double afterRate = static_cast<double>(stats.afterCount) / static_cast<double>(qMax(1, windowAfter));
+    return clamp01(afterRate - beforeRate);
+}
+
+double MainWindow::computeCrossIdPayloadVolatility(const CrossIdEventStats &stats) const
+{
+    const int payloadChangeCount = stats.beforePayloadTransitions + stats.afterPayloadTransitions;
+    const int opportunities = qMax(1, (stats.beforeCount + stats.afterCount) - 1);
+    return clamp01(static_cast<double>(payloadChangeCount) / static_cast<double>(opportunities));
+}
+
+double MainWindow::computeCrossIdIdleStability(const FrameIdleStats *idleStats) const
+{
+    if (!idleStats) return 0.0;
+
+    int byteChanges = 0;
+    int byteSamples = 0;
+    for (int i = 0; i < 64; i++)
+    {
+        const ByteIdleStats &ib = idleStats->bytes[i];
+        byteChanges += ib.changes;
+        byteSamples += qMax(0, ib.samples - 1);
+    }
+
+    if (byteSamples <= 0) return 0.0;
+
+    const double idleNoise = static_cast<double>(byteChanges) / static_cast<double>(byteSamples);
+    return qBound(0.0, 1.0 - idleNoise, 1.0);
+}
+
+
+void MainWindow::clearInspectDock()
+{
+    ui->lblInspectContext->setText(tr("No frame selected"));
+    ui->lblInspectChanged->setText(tr("Changed: -"));
+    ui->txtInspectNeighborhood->clear();
+    ui->txtInspectBits->clear();
+}
+
+void MainWindow::populateInspectDock(const QModelIndex &sourceIndex)
+{
+    if (!model || !sourceIndex.isValid()) return;
+
+    const CANFrame *selectedFrame = model->getFilteredFrameRef(sourceIndex.row());
+    if (!selectedFrame) return;
+
+    QString context = QString("ID 0x%1  Bus %2")
+                          .arg(selectedFrame->frameId(),
+                               selectedFrame->hasExtendedFrameFormat() ? 8 : 3,
+                               16,
+                               QLatin1Char('0'))
+                          .arg(selectedFrame->bus);
+
+    if (selectedFrame->originalIndex >= 0)
+        context += tr("  Original IDX %1").arg(selectedFrame->originalIndex + 1);
+
+    ui->lblInspectContext->setText(context.toUpper());
+    ui->txtInspectNeighborhood->setPlainText(formatNeighborhoodText(sourceIndex, 2));
+    ui->txtInspectBits->setPlainText(formatPayloadBits(*selectedFrame));
+
+    CANFrame prevFrame;
+    if (findPreviousFrameWithSameId(sourceIndex, prevFrame))
+        ui->lblInspectChanged->setText(formatChangedSummary(*selectedFrame, prevFrame));
+    else
+        ui->lblInspectChanged->setText(tr("Changed: first occurrence"));
+}
+
+void MainWindow::updateInspectDock(const QModelIndex &current, const QModelIndex &previous)
+{
+    Q_UNUSED(previous);
+
+    if (!current.isValid())
+    {
+        clearInspectDock();
+        return;
+    }
+
+    auto *proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
+    if (!proxy)
+    {
+        clearInspectDock();
+        return;
+    }
+
+    const QModelIndex sourceIndex = proxy->mapToSource(current);
+    if (!sourceIndex.isValid())
+    {
+        clearInspectDock();
+        return;
+    }
+
+    populateInspectDock(sourceIndex);
+}
+
+QString MainWindow::formatPayloadHex(const CANFrame &frame) const
+{
+    QStringList parts;
+    const QByteArray payload = frame.payload();
+    parts.reserve(payload.size());
+
+    for (int i = 0; i < payload.size(); ++i) {
+        parts << QString("%1")
+                    .arg(static_cast<unsigned char>(payload.at(i)), 2, 16, QLatin1Char('0'))
+                    .toUpper();
+    }
+
+    return parts.join(' ');
+}
+
+QString MainWindow::formatPayloadBits(const CANFrame &frame) const
+{
+    QStringList lines;
+    const QByteArray payload = frame.payload();
+    lines.reserve(payload.size());
+
+    for (int i = 0; i < payload.size(); ++i) {
+        const unsigned char b = static_cast<unsigned char>(payload.at(i));
+        QString bits;
+        for (int bit = 7; bit >= 0; --bit)
+            bits.append((b & (1 << bit)) ? '1' : '0');
+
+        lines << QString("B%1: %2").arg(i).arg(bits);
+    }
+
+    return lines.join('\n');
+}
+
+bool MainWindow::findPreviousFrameWithSameId(const QModelIndex &sourceIndex, CANFrame &outFrame) const
+{
+    if (!model) return false;
+
+    const CANFrame *current = model->getFilteredFrameRef(sourceIndex.row());
+    if (!current) return false;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames) return false;
+
+    const int rawRow = current->originalIndex;
+    if (rawRow <= 0 || rawRow > frames->size()) return false;
+
+    for (int i = rawRow - 1; i >= 0; --i) {
+        const CANFrame &candidate = frames->at(i);
+        if (candidate.frameId() == current->frameId() &&
+            candidate.bus == current->bus &&
+            candidate.hasExtendedFrameFormat() == current->hasExtendedFrameFormat()) {
+            outFrame = candidate;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+QString MainWindow::formatChangedSummary(const CANFrame &frame, const CANFrame &previousFrame) const
+{
+    const QByteArray a = frame.payload();
+    const QByteArray b = previousFrame.payload();
+    const int count = qMin(a.size(), b.size());
+
+    QStringList changed;
+    for (int i = 0; i < count; i++)
+    {
+        if (a.at(i) != b.at(i))
+            changed << QString("B%1").arg(i);
+    }
+
+    if (a.size() != b.size())
+    {
+        for (int i = count; i < a.size(); i++)
+            changed << QString("B%1").arg(i);
+    }
+
+    if (changed.isEmpty())
+        return tr("Changed: none");
+
+    return tr("Changed: %1 (%2/%3 bytes)")
+        .arg(changed.join(", "))
+        .arg(changed.size())
+        .arg(a.size());
+}
+
+QVector<int> MainWindow::findSameIdNeighborRows(const QModelIndex &sourceIndex, int radius) const
+{
+    QVector<int> rows;
+    if (!model) return rows;
+
+    const CANFrame *centerFrame = model->getFilteredFrameRef(sourceIndex.row());
+    if (!centerFrame) return rows;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames) return rows;
+
+    const int centerRow = centerFrame->originalIndex;
+    if (centerRow < 0 || centerRow >= frames->size()) return rows;
+
+    const CANFrame &center = frames->at(centerRow);
+
+    QVector<int> before;
+    for (int i = centerRow - 1; i >= 0 && before.size() < radius; --i) {
+        const CANFrame &candidate = frames->at(i);
+        if (candidate.frameId() == center.frameId() &&
+            candidate.bus == center.bus &&
+            candidate.hasExtendedFrameFormat() == center.hasExtendedFrameFormat()) {
+            before.prepend(i);
+        }
+    }
+
+    QVector<int> after;
+    for (int i = centerRow + 1; i < frames->size() && after.size() < radius; ++i) {
+        const CANFrame &candidate = frames->at(i);
+        if (candidate.frameId() == center.frameId() &&
+            candidate.bus == center.bus &&
+            candidate.hasExtendedFrameFormat() == center.hasExtendedFrameFormat()) {
+            after.append(i);
+        }
+    }
+
+    rows = before;
+    rows.append(centerRow);
+    rows += after;
+    return rows;
+}
+
+QString MainWindow::formatNeighborhoodText(const QModelIndex &sourceIndex, int radius) const
+{
+    if (!model) return tr("(no frame data)");
+
+    const CANFrame *centerFrame = model->getFilteredFrameRef(sourceIndex.row());
+    if (!centerFrame) return tr("(no frame data)");
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames) return tr("(no frame data)");
+
+    const QVector<int> rows = findSameIdNeighborRows(sourceIndex, radius);
+    if (rows.isEmpty()) return tr("(no matching context)");
+
+    const int centerRow = centerFrame->originalIndex;
+    const int centerPos = rows.indexOf(centerRow);
+    if (centerPos < 0) return tr("(context error)");
+
+    int payloadFieldWidth = 0;
+    QStringList payloadTexts;
+    payloadTexts.reserve(rows.size());
+
+    for (int row : rows) {
+        if (row < 0 || row >= frames->size()) continue;
+        const QString payloadText = formatPayloadHex(frames->at(row));
+        payloadTexts.append(payloadText);
+        payloadFieldWidth = qMax(payloadFieldWidth, payloadText.size());
+    }
+
+    QStringList lines;
+
+    for (int i = 0; i < rows.size(); ++i) {
+        const int row = rows.at(i);
+        if (row < 0 || row >= frames->size()) continue;
+
+        const CANFrame &frame = frames->at(row);
+
+        const int delta = i - centerPos;
+        QString tag;
+        if (delta == 0) tag = "Cur";
+        else if (delta < 0) tag = QString::number(delta);
+        else tag = QString("+%1").arg(delta);
+
+        const QString idxText = QString("[%1]").arg(frame.originalIndex);
+
+        lines << QString("%1   %2   %3")
+                    .arg(payloadTexts.at(i), -payloadFieldWidth)
+                    .arg(tag, -4)
+                    .arg(idxText, -8);
+    }
+
+    return lines.join('\n');
+}
+
+void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result)
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle(tr("Bookmark Analysis"));
+    dlg.setModal(true);
+    dlg.resize(1180, 780);
+
+    QVBoxLayout *mainLayout = new QVBoxLayout(&dlg);
+
+    QLabel *summaryLabel = new QLabel(
+        tr("Selected frame: Bus %1, ID %2, frame %3\n"
+           "Windows: same-ID radius %4, cross-ID before %5, after %6")
+            .arg(result.anchorFrame.bus)
+            .arg(Utility::formatCANID(result.anchorFrame.frameId(), result.anchorFrame.hasExtendedFrameFormat()))
+            .arg(result.originalIndex)
+            .arg(result.sameIdRadius)
+            .arg(result.crossIdWindowBefore)
+            .arg(result.crossIdWindowAfter),
+        &dlg);
+    summaryLabel->setWordWrap(true);
+    summaryLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    mainLayout->addWidget(summaryLabel);
+
+    QSplitter *splitter = new QSplitter(Qt::Vertical, &dlg);
+    mainLayout->addWidget(splitter, 1);
+
+    QTabWidget *tabs = new QTabWidget(splitter);
+
+    QWidget *sameIdPage = new QWidget(tabs);
+    QVBoxLayout *sameIdLayout = new QVBoxLayout(sameIdPage);
+    QTableWidget *sameIdTable = new QTableWidget(sameIdPage);
+    sameIdLayout->addWidget(sameIdTable);
+    tabs->addTab(sameIdPage, tr("Same-ID Byte Changes"));
+
+    QWidget *crossIdPage = new QWidget(tabs);
+    QVBoxLayout *crossIdLayout = new QVBoxLayout(crossIdPage);
+    QTableWidget *crossIdTable = new QTableWidget(crossIdPage);
+    crossIdLayout->addWidget(crossIdTable);
+    tabs->addTab(crossIdPage, tr("Cross-ID Activity"));
+
+    QWidget *detailPane = new QWidget(splitter);
+    QVBoxLayout *detailLayout = new QVBoxLayout(detailPane);
+    QLabel *detailLabel = new QLabel(tr("Details"), detailPane);
+    QPlainTextEdit *detailsText = new QPlainTextEdit(detailPane);
+    detailsText->setReadOnly(true);
+    detailLayout->addWidget(detailLabel);
+    detailLayout->addWidget(detailsText);
+
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 2);
+
+    sameIdTable->setColumnCount(10);
+    sameIdTable->setHorizontalHeaderLabels(QStringList()
+        << tr("Rank")
+        << tr("Bus")
+        << tr("ID")
+        << tr("Byte")
+        << tr("Before")
+        << tr("After")
+        << tr("Score")
+        << tr("Support")
+        << tr("Stability")
+        << tr("Idle"));
+    sameIdTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    sameIdTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    sameIdTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    sameIdTable->setAlternatingRowColors(true);
+    sameIdTable->verticalHeader()->setVisible(false);
+    sameIdTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    sameIdTable->setSortingEnabled(false);
+
+    crossIdTable->setColumnCount(9);
+    crossIdTable->setHorizontalHeaderLabels(QStringList()
+        << tr("Rank")
+        << tr("Bus")
+        << tr("ID")
+        << tr("Score")
+        << tr("Before")
+        << tr("After")
+        << tr("Total")
+        << tr("Shift")
+        << tr("Volatility"));
+    crossIdTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    crossIdTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    crossIdTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    crossIdTable->setAlternatingRowColors(true);
+    crossIdTable->verticalHeader()->setVisible(false);
+    crossIdTable->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+    crossIdTable->setSortingEnabled(false);
+
+    QVector<FrameKey> sameIdKeys;
+    QVector<QString> sameIdDetails;
+    sameIdKeys.reserve(result.sameIdCandidates.size());
+    sameIdDetails.reserve(result.sameIdCandidates.size());
+
+    sameIdTable->setRowCount(result.sameIdCandidates.size());
+    for (int row = 0; row < result.sameIdCandidates.size(); row++)
+    {
+        const FlipCandidate &c = result.sameIdCandidates.at(row);
+        sameIdKeys.append(c.key);
+
+        QString detail = tr("Bus %1, ID %2, byte %3 changed %4 -> %5\n"
+                            "Score %6, %7\n"
+                            "Why: %8\n"
+                            "Support %9\n"
+                            "Local stability %10, local noise %11\n"
+                            "Idle stability %12, idle noise %13 (%14)\n"
+                            "Before count %15, after count %16, nearby flips %17")
+                .arg(c.key.bus)
+                .arg(Utility::formatCANID(c.key.frameId, c.key.extended))
+                .arg(c.byteIndex)
+                .arg(c.beforeValue, 2, 16, QLatin1Char('0')).toUpper()
+                .arg(c.afterValue, 2, 16, QLatin1Char('0')).toUpper()
+                .arg(c.score, 0, 'f', 2)
+                .arg(describeFlipStrength(c.score))
+                .arg(describeSameIdReason(c))
+                .arg(c.supportScore, 0, 'f', 2)
+                .arg(c.localStability, 0, 'f', 2)
+                .arg(c.localNoise, 0, 'f', 3)
+                .arg(c.idleStability, 0, 'f', 2)
+                .arg(c.idleNoise, 0, 'f', 3)
+                .arg(describeIdleNoise(c.idleNoise))
+                .arg(c.beforeCount)
+                .arg(c.afterCount)
+                .arg(c.eventFlipCount);
+        sameIdDetails.append(detail);
+
+        sameIdTable->setItem(row, 0, new NumericTableWidgetItem(row + 1, QString::number(row + 1)));
+        sameIdTable->setItem(row, 1, new NumericTableWidgetItem(c.key.bus, QString::number(c.key.bus)));
+        sameIdTable->setItem(row, 2, new QTableWidgetItem(Utility::formatCANID(c.key.frameId, c.key.extended)));
+        sameIdTable->setItem(row, 3, new NumericTableWidgetItem(c.byteIndex, QString::number(c.byteIndex)));
+        sameIdTable->setItem(row, 4, new QTableWidgetItem(QStringLiteral("%1").arg(c.beforeValue, 2, 16, QLatin1Char('0')).toUpper()));
+        sameIdTable->setItem(row, 5, new QTableWidgetItem(QStringLiteral("%1").arg(c.afterValue, 2, 16, QLatin1Char('0')).toUpper()));
+        sameIdTable->setItem(row, 6, new NumericTableWidgetItem(c.score, QString::number(c.score, 'f', 2)));
+        sameIdTable->setItem(row, 7, new NumericTableWidgetItem(c.supportScore, QString::number(c.supportScore, 'f', 2)));
+        sameIdTable->setItem(row, 8, new NumericTableWidgetItem(c.localStability, QString::number(c.localStability, 'f', 2)));
+        sameIdTable->setItem(row, 9, new NumericTableWidgetItem(c.idleNoise, QString::number(c.idleNoise, 'f', 3)));
+    }
+
+    QVector<FrameKey> crossIdKeys;
+    QVector<QString> crossIdDetails;
+    crossIdKeys.reserve(result.crossIdCandidates.size());
+    crossIdDetails.reserve(result.crossIdCandidates.size());
+
+    crossIdTable->setRowCount(result.crossIdCandidates.size());
+    for (int row = 0; row < result.crossIdCandidates.size(); row++)
+    {
+        const CrossIdCandidate &c = result.crossIdCandidates.at(row);
+        crossIdKeys.append(c.key);
+
+        QString detail = tr("Bus %1, ID %2\n"
+                            "Score %3\n"
+                            "Why: %4\n"
+                            "Before %5, after %6, total %7\n"
+                            "Appearance shift %8\n"
+                            "Payload changes %9, payload volatility %10\n"
+                            "Idle stability %11, idle noise %12 (%13)\n"
+                            "Appeared only after: %14\n"
+                            "Disappeared after: %15")
+                .arg(c.key.bus)
+                .arg(Utility::formatCANID(c.key.frameId, c.key.extended))
+                .arg(c.score, 0, 'f', 2)
+                .arg(describeCrossIdReason(c))
+                .arg(c.beforeCount)
+                .arg(c.afterCount)
+                .arg(c.totalEventCount)
+                .arg(c.appearanceShift, 0, 'f', 2)
+                .arg(c.payloadChangeCount)
+                .arg(c.payloadVolatility, 0, 'f', 2)
+                .arg(c.idleStability, 0, 'f', 2)
+                .arg(c.idleNoise, 0, 'f', 3)
+                .arg(describeIdleNoise(c.idleNoise))
+                .arg(c.appearedOnlyAfter ? tr("yes") : tr("no"))
+                .arg(c.disappearedAfter ? tr("yes") : tr("no"));
+        crossIdDetails.append(detail);
+
+        crossIdTable->setItem(row, 0, new NumericTableWidgetItem(row + 1, QString::number(row + 1)));
+        crossIdTable->setItem(row, 1, new NumericTableWidgetItem(c.key.bus, QString::number(c.key.bus)));
+        crossIdTable->setItem(row, 2, new QTableWidgetItem(Utility::formatCANID(c.key.frameId, c.key.extended)));
+        crossIdTable->setItem(row, 3, new NumericTableWidgetItem(c.score, QString::number(c.score, 'f', 2)));
+        crossIdTable->setItem(row, 4, new NumericTableWidgetItem(c.beforeCount, QString::number(c.beforeCount)));
+        crossIdTable->setItem(row, 5, new NumericTableWidgetItem(c.afterCount, QString::number(c.afterCount)));
+        crossIdTable->setItem(row, 6, new NumericTableWidgetItem(c.totalEventCount, QString::number(c.totalEventCount)));
+        crossIdTable->setItem(row, 7, new NumericTableWidgetItem(c.appearanceShift, QString::number(c.appearanceShift, 'f', 2)));
+        crossIdTable->setItem(row, 8, new NumericTableWidgetItem(c.payloadVolatility, QString::number(c.payloadVolatility, 'f', 2)));
+    }
+
+    sameIdTable->setSortingEnabled(true);
+    crossIdTable->setSortingEnabled(true);
+    sameIdTable->sortItems(6, Qt::DescendingOrder);
+    crossIdTable->sortItems(3, Qt::DescendingOrder);
+
+    FrameKey currentKey;
+    bool hasCurrentKey = false;
+
+    auto updateSameIdDetails = [&]()
+    {
+        const int row = sameIdTable->currentRow();
+        if (row < 0 || row >= sameIdDetails.size())
+        {
+            detailsText->clear();
+            hasCurrentKey = false;
+            return;
+        }
+
+        detailsText->setPlainText(sameIdDetails.at(row));
+        currentKey = sameIdKeys.at(row);
+        hasCurrentKey = true;
+    };
+
+    auto updateCrossIdDetails = [&]()
+    {
+        const int row = crossIdTable->currentRow();
+        if (row < 0 || row >= crossIdDetails.size())
+        {
+            detailsText->clear();
+            hasCurrentKey = false;
+            return;
+        }
+
+        detailsText->setPlainText(crossIdDetails.at(row));
+        currentKey = crossIdKeys.at(row);
+        hasCurrentKey = true;
+    };
+
+    connect(sameIdTable, &QTableWidget::currentCellChanged, &dlg,
+            [&](int, int, int, int) { updateSameIdDetails(); });
+
+    connect(crossIdTable, &QTableWidget::currentCellChanged, &dlg,
+            [&](int, int, int, int) { updateCrossIdDetails(); });
+
+    connect(tabs, &QTabWidget::currentChanged, &dlg,
+            [&](int)
+    {
+        if (tabs->currentWidget() == sameIdPage)
+            updateSameIdDetails();
+        else if (tabs->currentWidget() == crossIdPage)
+            updateCrossIdDetails();
+    });
+
+    QDialogButtonBox *buttons = new QDialogButtonBox(&dlg);
+    QPushButton *copyButton = buttons->addButton(tr("Copy Details"), QDialogButtonBox::ActionRole);
+    QPushButton *jumpButton = buttons->addButton(tr("Jump to ID"), QDialogButtonBox::ActionRole);
+    QPushButton *graphButton = buttons->addButton(tr("Graph ID"), QDialogButtonBox::ActionRole);
+    QPushButton *closeButton = buttons->addButton(QDialogButtonBox::Close);
+
+    connect(copyButton, &QPushButton::clicked, &dlg, [&]()
+    {
+        QClipboard *clipboard = QApplication::clipboard();
+        if (clipboard)
+            clipboard->setText(detailsText->toPlainText());
+    });
+
+    connect(jumpButton, &QPushButton::clicked, &dlg, [&]()
+    {
+        if (!hasCurrentKey)
+            return;
+        jumpToAnalysisFrameKey(currentKey);
+    });
+
+    connect(graphButton, &QPushButton::clicked, &dlg, [&]()
+    {
+        if (!hasCurrentKey)
+            return;
+        graphAnalysisFrameKey(currentKey);
+    });
+
+    connect(closeButton, &QPushButton::clicked, &dlg, &QDialog::accept);
+    mainLayout->addWidget(buttons);
+
+    if (sameIdTable->rowCount() > 0)
+    {
+        tabs->setCurrentWidget(sameIdPage);
+        sameIdTable->selectRow(0);
+        updateSameIdDetails();
+    }
+    else if (crossIdTable->rowCount() > 0)
+    {
+        tabs->setCurrentWidget(crossIdPage);
+        crossIdTable->selectRow(0);
+        updateCrossIdDetails();
+    }
+
+    dlg.exec();
+}
+
+void MainWindow::jumpToAnalysisFrameKey(const FrameKey &key)
+{
+    if (!model)
+        return;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || frames->isEmpty())
+        return;
+
+    for (int i = 0; i < frames->size(); i++)
+    {
+        const CANFrame &frame = frames->at(i);
+        if (frame.bus != key.bus)
+            continue;
+        if (frame.frameId() != key.frameId)
+            continue;
+        if (frame.hasExtendedFrameFormat() != key.extended)
+            continue;
+
+        if (!selectFrameByOriginalIndex(frame.originalIndex))
+            statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
+        return;
+    }
+
+    statusBar()->showMessage(tr("Could not find a frame for the selected ID"), 2500);
+}
+
+void MainWindow::graphAnalysisFrameKey(const FrameKey &key)
+{
+    if (!model)
+        return;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || frames->isEmpty())
+        return;
+
+    for (int i = 0; i < frames->size(); i++)
+    {
+        const CANFrame &frame = frames->at(i);
+        if (frame.bus != key.bus)
+            continue;
+        if (frame.frameId() != key.frameId)
+            continue;
+        if (frame.hasExtendedFrameFormat() != key.extended)
+            continue;
+
+        showGraphingWindow();
+        emit sendCenterTimeID(frame.frameId(), frame.timeStamp().microSeconds() / 1000000.0);
+        selectFrameByOriginalIndex(frame.originalIndex);
+        return;
+    }
+
+    statusBar()->showMessage(tr("Could not find a frame to graph for the selected ID"), 2500);
 }

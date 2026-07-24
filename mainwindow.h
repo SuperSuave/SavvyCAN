@@ -5,6 +5,16 @@
 #include <QMainWindow>
 #include <QSerialPort>
 #include <QSerialPortInfo>
+#include <QSet>
+#include <QTimer>
+#include <array>
+#include <algorithm>
+#include <QDialogButtonBox>
+#include <QHeaderView>
+#include <QPushButton>
+#include <QSplitter>
+#include <QTabWidget>
+#include <QTableWidget>
 #include "canframemodel.h"
 #include "can_structs.h"
 #include "framefileio.h"
@@ -34,11 +44,20 @@
 #include "re/dbccomparatorwindow.h"
 #include "re/udsfirmwareuploaderwindow.h"
 #include "canbridgewindow.h"
+#include "bookmarkmanager.h"
+#include "bookmarkmanagerdialog.h"
 
 class CANConnection;
 class ConnectionWindow;
 class ISOTP_InterpreterWindow;
 class ScriptingWindow;
+class BookmarkManager;
+class BookmarkManagerDialog;
+class QDockWidget;
+class QLabel;
+class QPlainTextEdit;
+class QGroupBox;
+class QWidget;
 
 enum SIMP_COL
 {
@@ -108,7 +127,7 @@ private slots:
     void handleSaveDecodedCsv();
     void connectionStatusUpdated(int conns);
     void gridClicked(QModelIndex);
-    void gridDoubleClicked(QModelIndex);
+    void gridDoubleClicked(const QModelIndex &idx);
     void gridContextMenuRequest(QPoint pos);
     void copyFromTable();
     void setupAddToNewGraph();
@@ -128,6 +147,19 @@ private slots:
     void headerClicked (int logicalIndex);
     void DBCSettingsUpdated();
     void onSenderCellChanged(int, int);
+    void showBookmarksWindow();
+
+    /// Suggested by AI
+    void deleteBookmarkByIndex(int bookmarkIndex);
+    void jumpToBookmark(int bookmarkIndex);
+    void jumpToOriginalIndex();
+    void copyOriginalIndex();
+    void filterFrameFilterList(const QString &text);
+    void setAutoBookmarkNewIdsActive(bool enabled);
+    void autoBookmarkTimeoutExpired();
+    void triggerTimedDiscoveryBookmark();
+    void analyzeCurrentBookmarkOrSelection();
+
 
 public slots:
     void gotFrames(int);
@@ -213,9 +245,251 @@ private:
     QPoint contextMenuPosition;
     bool rowExpansionActive = false;
 
+    //bookmarking -- Helped by AI
+    BookmarkManager *bookmarkManager;
+    BookmarkManagerDialog *bookmarkDialog;
+
+    QString quickBookmarkLabel = "Bookmark";
+    QString quickBookmarkAlternateLabel = "Alternate Bookmark";
+    bool quickBookmarkUseAlternatingLabels = false;
+    bool quickBookmarkAlternateState = false; // false = A next, true = B next
+
+    void triggerQuickBookmark();
+    void resetQuickBookmarkToggle();
+
+    void addBookmarkSmart(const QString &tag);
+    void addBookmarkAtTail(const QString &tag);
+    void addBookmarkAtCurrentSelection();
+    void addBookmarkAtCurrentSelection(const QString &tag);
+
+    quint64 makeAutoBookmarkKey(const CANFrame &frame) const;
+    void processAutoBookmarks(const QVector<CANFrame> &frames);
+    bool findLatestFrameByBusAndId(int bus, uint32_t frameId, CANFrame &outFrame) const;
+    void armAutoBookmarkWindow(int durationMs);
+
+    bool autoBookmarkNewIdsActive = false;
+    QSet<quint64> autoBookmarkSeenIds;
+    QTimer *autoBookmarkTimer = nullptr;
+    int autoBookmarkDurationMs = 2000;
+
+    QString describeFlipStrength(double score) const;
+    QString describeIdleNoise(double idleNoise) const;
+
+    struct FrameKey
+    {
+        int bus = -1;
+        uint32_t frameId = 0;
+        bool extended = false;
+
+        bool operator==(const FrameKey &other) const
+        {
+            return bus == other.bus &&
+                   frameId == other.frameId &&
+                   extended == other.extended;
+        }
+    };
+
+    friend inline uint qHash(const FrameKey &key, uint seed = 0)
+    {
+        seed = qHash(key.bus, seed);
+        seed = qHash(key.frameId, seed);
+        seed = qHash(key.extended, seed);
+        return seed;
+    }
+
+    struct EventByteStats
+    {
+        bool hasBeforeValue = false;
+        bool hasAfterValue = false;
+        quint8 beforeValue = 0;
+        quint8 afterValue = 0;
+        int beforeCount = 0;
+        int afterCount = 0;
+
+        int beforeTransitions = 0;
+        int afterTransitions = 0;
+        int crossTransitions = 0;
+
+        quint8 lastBeforeSeen = 0;
+        quint8 lastAfterSeen = 0;
+        bool hasLastBeforeSeen = false;
+        bool hasLastAfterSeen = false;
+    };
+
+    struct ByteIdleStats
+    {
+        int samples = 0;
+        int changes = 0;
+        quint8 lastValue = 0;
+        bool hasLastValue = false;
+    };
+
+    struct FrameIdleStats
+    {
+        int totalFrames = 0;
+        int maxDlcSeen = 0;
+        std::array<ByteIdleStats, 64> bytes;
+    };
+
+    struct EventFrameStats
+    {
+        FrameKey key;
+        int matchedFramesBefore = 0;
+        int matchedFramesAfter = 0;
+        std::array<EventByteStats, 64> bytes;
+    };
+
+    struct FlipCandidate
+    {
+        FrameKey key;
+        int byteIndex = -1;
+        quint8 beforeValue = 0;
+        quint8 afterValue = 0;
+
+        int beforeCount = 0;
+        int afterCount = 0;
+        int eventFlipCount = 0;
+
+        double supportScore = 0.0;
+        double localNoise = 0.0;
+        double localStability = 0.0;
+        double idleNoise = 0.0;
+        double idleStability = 0.0;
+
+        double score = 0.0;
+    };
+
+    struct CrossIdCandidate
+    {
+        FrameKey key;
+        int beforeCount = 0;
+        int afterCount = 0;
+        int totalEventCount = 0;
+
+        int payloadChangeCount = 0;
+
+        double appearanceShift = 0.0;
+        double payloadVolatility = 0.0;
+        double idleNoise = 0.0;
+        double idleStability = 0.0;
+
+        bool appearedOnlyAfter = false;
+        bool disappearedAfter = false;
+
+        double score = 0.0;
+    };
+
+    struct BookmarkAnalysisResult
+    {
+        CANFrame anchorFrame;
+        int originalIndex = -1;
+
+        int sameIdRadius = 0;
+        int crossIdWindowBefore = 0;
+        int crossIdWindowAfter = 0;
+
+        QVector<FlipCandidate> sameIdCandidates;
+        QVector<CrossIdCandidate> crossIdCandidates;
+
+    };
+
+    struct CrossIdEventStats
+    {
+        FrameKey key;
+        int beforeCount = 0;
+        int afterCount = 0;
+
+        bool hasLastBefore = false;
+        bool hasLastAfter = false;
+        QByteArray lastBeforePayload;
+        QByteArray lastAfterPayload;
+
+        int beforePayloadTransitions = 0;
+        int afterPayloadTransitions = 0;
+    };
+
+    struct SameIdScoreFeatures
+    {
+        double eventDelta = 0.0;
+        double supportScore = 0.0;
+        double localStability = 0.0;
+        double idleStability = 0.0;
+        double windowConfidence = 0.0;
+    };
+
+    struct CrossIdScoreFeatures
+    {
+        double appearanceShift = 0.0;
+        double postEventPersistence = 0.0;
+        double exclusiveAfter = 0.0;
+        double exclusiveBefore = 0.0;
+        double payloadVolatility = 0.0;
+        double idleStability = 0.0;
+    };
+
+    FrameKey makeFrameKey(const CANFrame &frame) const;
+    BookmarkAnalysisResult analyzeBookmarkEvent(int originalIndex, int sameIdRadius, int crossIdWindowBefore, int crossIdWindowAfter) const;
+
+    QVector<FlipCandidate> analyzeSameIdAroundBookmark(const QVector<CANFrame> &frames, int originalIndex, int sameIdRadius) const;
+
+    QVector<CrossIdCandidate> analyzeCrossIdAroundBookmark(const QVector<CANFrame> &frames, int originalIndex, int windowBefore, int windowAfter) const;
+
+    void accumulateCrossIdEventFrame(CrossIdEventStats &stats, const CANFrame &frame, bool isBeforeSide) const;
+    void accumulateEventFrame(EventFrameStats &stats, const CANFrame &frame, bool isBeforeSide) const;
+    QVector<FlipCandidate> rankFlipCandidates(const QHash<FrameKey, EventFrameStats> &eventStats, int sameIdRadius) const;
+
+    // Optional future enhancement: live or offline-learned idle baseline.
+    // Not required, but leaving the state hook here makes later extension easy.
+    QHash<FrameKey, FrameIdleStats> idleBaseline;
+    bool idleBaselineAvailable = false;
+
+    // byteinspector -- Helped by AI
+    QDockWidget *inspectDock = nullptr;
+    QWidget *inspectPaneWidget = nullptr;
+    QSortFilterProxyModel *proxyModel = nullptr;
+    void clearInspectDock();
+    void updateInspectDock(const QModelIndex &current, const QModelIndex &previous);
+    void populateInspectDock(const QModelIndex &sourceIndex);
+
+    QString formatPayloadHex(const CANFrame &frame) const;
+    QString formatPayloadBits(const CANFrame &frame) const;
+    QString formatChangedSummary(const CANFrame &frame, const CANFrame &previousFrame) const;
+    QString formatNeighborhoodText(const QModelIndex &sourceIndex, int radius = 2) const;
+    QVector<int> findSameIdNeighborRows(const QModelIndex &sourceIndex, int radius) const;
+    bool findPreviousFrameWithSameId(const QModelIndex &sourceIndex, CANFrame &outFrame) const;
+
+    static double clamp01(double value);
+    static double safeRatio(double num, double denom);
+
+    SameIdScoreFeatures buildSameIdScoreFeatures(const EventByteStats &eb, const ByteIdleStats *idleByteStats, int sameIdRadius) const;
+
+    CrossIdScoreFeatures buildCrossIdScoreFeatures(const CrossIdEventStats &stats, const FrameIdleStats *idleStats, int windowBefore, int windowAfter) const;
+
+    double scoreSameIdCandidate(const SameIdScoreFeatures &f) const;
+    double scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const;
+    double computeSameIdSupportScore(const EventByteStats& stats, int sameIdRadius) const;
+    double computeSameIdLocalStability(const EventByteStats& stats) const;
+    double computeSameIdIdleStability(const ByteIdleStats* idleStats) const;
+    double scoreSameIdCandidate(const EventByteStats& stats, const ByteIdleStats* idleStats, int sameIdRadius) const;
+
+    double computeCrossIdAppearanceShift(const CrossIdEventStats& stats, int windowBefore, int windowAfter) const;
+    double computeCrossIdPayloadVolatility(const CrossIdEventStats& stats) const;
+    double computeCrossIdIdleStability(const FrameIdleStats* idleStats) const;
+    double scoreCrossIdCandidate(const CrossIdEventStats& stats, const FrameIdleStats* idleStats, int windowBefore, int windowAfter) const;
+
+    void showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result);
+    void jumpToAnalysisFrameKey(const FrameKey &key);
+    void graphAnalysisFrameKey(const FrameKey &key);
+
+    QString describeSameIdReason(const FlipCandidate &c) const;
+    QString describeCrossIdReason(const CrossIdCandidate &c) const;
+
+
     //private methods
     QString getSignalNameFromPosition(QPoint pos);
     uint32_t getMessageIDFromPosition(QPoint pos);
+    bool getSelectedFrameInfo(CANFrame &outFrame, QModelIndex *outIndex = nullptr);
+    bool selectFrameByOriginalIndex(int originalIndex);
     void copySelection();
     void handleSaveDecodedMethod(bool csv);
     void saveDecodedTextFile(QString);

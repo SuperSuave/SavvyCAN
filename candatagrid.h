@@ -49,7 +49,6 @@ class CANDataGrid : public QWidget
 public:
     explicit CANDataGrid(QWidget *parent = 0);
     ~CANDataGrid();
-    void paintEvent(QPaintEvent *event) override;
     void setReference(unsigned char *, bool);
     void updateData(unsigned char *, bool);
     void setUsed(unsigned char *, bool);
@@ -67,6 +66,8 @@ public:
 
 protected:
     void mousePressEvent(QMouseEvent *event) Q_DECL_OVERRIDE;
+    void paintEvent(QPaintEvent *event) override;
+    void changeEvent(QEvent *event) override;
 
 signals:
     void gridClicked(int bitClicked);
@@ -84,10 +85,28 @@ private:
     GridTextState textStates[64][8]; //first dimension is bytes, second is bits
     QPoint upperLeft, gridSize;
     GridMode gridMode;
-    QBrush blackBrush, whiteBrush, redBrush, greenBrush, grayBrush;
-    QBrush greenHashBrush, blackHashBrush;
+
+    QColor fire[256];
     QPainter *painter;
     QRect viewport;
+
+    void refreshThemeColors();
+    QColor blendColors(const QColor &a, const QColor &b, qreal amount) const;
+    bool isDarkTheme() const;
+
+    QBrush emptyBrush;
+    QBrush setBrush;
+    QBrush clearedBrush;
+    QBrush changedBrush;
+    QBrush usedUnknownBrush;
+    QBrush usedUnknownHashBrush;
+    QBrush signalSetHashBrush;
+
+    QColor gridTextColor;
+    QColor gridTextMutedColor;
+    QColor gridBorderColor;
+    QColor emphasizedTextColor;
+
     int xSpan;
     int ySpan;
     int xSector;
@@ -104,7 +123,6 @@ private:
     QFont sigNameFont;
     QFontMetrics *smallMetric;
     QFontMetrics *largeMetric;
-    QColor fire[256];
 
     void paintGridCells();
     void paintCommonBeginning();

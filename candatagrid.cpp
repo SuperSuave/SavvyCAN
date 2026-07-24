@@ -57,6 +57,55 @@ QVector<QColor> signalColors =
     QColor(29, 211, 147)
 };
 
+QColor CANDataGrid::blendColors(const QColor &a, const QColor &b, qreal amount) const
+{
+    const qreal inv = 1.0 - amount;
+    return QColor(
+        int(a.red() * inv + b.red() * amount),
+        int(a.green() * inv + b.green() * amount),
+        int(a.blue() * inv + b.blue() * amount),
+        int(a.alpha() * inv + b.alpha() * amount)
+    );
+}
+
+bool CANDataGrid::isDarkTheme() const
+{
+    const QColor base = palette().color(QPalette::Base);
+    const QColor text = palette().color(QPalette::Text);
+    return base.lightness() < text.lightness();
+}
+
+void CANDataGrid::refreshThemeColors()
+{
+    const QPalette pal = palette();
+
+    const QColor base = pal.color(QPalette::Base);
+    const QColor altBase = pal.color(QPalette::AlternateBase);
+    const QColor text = pal.color(QPalette::Text);
+    const QColor mid = pal.color(QPalette::Mid);
+    const QColor highlight = pal.color(QPalette::Highlight);
+
+    const bool dark = isDarkTheme();
+
+    emptyBrush = QBrush(blendColors(base, text, dark ? 0.12 : 0.0));
+    setBrush = QBrush(blendColors(text, base, dark ? 0.15 : 0.05));
+    clearedBrush = QBrush(dark ? QColor(180, 70, 70) : QColor(220, 70, 70));
+    changedBrush = QBrush(dark ? QColor(70, 180, 110) : QColor(0, 180, 0));
+
+    usedUnknownBrush = QBrush(blendColors(altBase, text, dark ? 0.18 : 0.10));
+    usedUnknownHashBrush = QBrush(blendColors(altBase, text, dark ? 0.22 : 0.14), Qt::BDiagPattern);
+    signalSetHashBrush = QBrush(blendColors(changedBrush.color(), base, dark ? 0.15 : 0.10), Qt::BDiagPattern);
+
+    gridTextColor = text;
+    gridTextMutedColor = blendColors(text, base, dark ? 0.35 : 0.55);
+    gridBorderColor = blendColors(mid, text, dark ? 0.20 : 0.10);
+    emphasizedTextColor = dark ? highlight.lighter(125) : highlight.darker(115);
+
+    fire[0] = base.darker(dark ? 160 : 110);
+
+    update();
+}
+
 CANDataGrid::CANDataGrid(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::CANDataGrid)
@@ -69,44 +118,23 @@ CANDataGrid::CANDataGrid(QWidget *parent) :
     memset(refData, 0, 64);
     memset(usedData, 0, 64);
     for (int j = 0; j < 512; j++) usedSignalNum[j] = -1;
-    bytesToDraw = 8; //default to the old behavior
+    bytesToDraw = 8;
+
     for (int x = 0; x < 8; x++)
-        for (int y = 0; y < 64; y++)
-        {
+        for (int y = 0; y < 64; y++) {
             textStates[y][x] = GridTextState::NORMAL;
             heatData[y * 8 + x] = 0;
         }
 
-    blackBrush = QBrush(Qt::black);
-    whiteBrush = QBrush(Qt::white);
-    redBrush = QBrush(Qt::red);
-    greenBrush = QBrush(Qt::green);
-    greenHashBrush = QBrush(QColor(0, 0xB6, 0), Qt::BDiagPattern);
-    blackHashBrush = QBrush(QColor(0, 0, 0), Qt::FDiagPattern);
-    grayBrush = QBrush(QColor(230,230,230));
     xOffset = 0;
     yOffset = 0;
 
-    //generate the palette
-
-    /* //this one looks sort of like a fire. It was my first idea but never really got to where I liked it
-    for(int x = 1; x < 256; x++)
-    {
-        int lum = x * 2;
-        if (lum < 40) lum = 40;
-        if (lum > 250) lum = 250;
-        fire[x] = QColor::fromHsl((int)(x / 3.5), 255 - ((256 - x) / 10), lum);
-    }
-    */
-
-    for(int x = 1; x < 256; x++)
-    {
+    for (int x = 1; x < 256; x++) {
         int hue = 256 - x;
         fire[x] = QColor::fromHsl(hue, 255, 127);
     }
 
-    //the 0th entry should always be black and really stand out from the rest
-    fire[0] = Qt::black;
+    refreshThemeColors();
 }
 
 CANDataGrid::~CANDataGrid()
@@ -277,7 +305,7 @@ void CANDataGrid::paintCommonBeginning()
     }
     sigNameTextSize = qMin(viewport.size().height(), viewport.size().width()) / (textRestrict * 5.0);
 
-    painter->setPen(QPen(QApplication::palette().color(QPalette::Text)));
+    painter->setPen(QPen(gridTextColor));
     mainFont.setPixelSize(bigTextSize);
     painter->setFont(mainFont);
     smallFont.setPixelSize(smallTextSize);
@@ -335,7 +363,7 @@ void CANDataGrid::paintCommonBeginning()
         painter->drawText(QRect(viewport.left() + 2, nearY + (ySector * y), xOffset, ySector), Qt::AlignCenter, QString::number(y * skip));
     }
 
-    painter->setPen(QPen(Qt::black));
+    painter->setPen(QPen(gridTextColor));
     painter->setFont(mainFont);
 }
 
@@ -346,6 +374,9 @@ void CANDataGrid::paintGridCells()
     bool thisBit, prevBit;
     int usedSigNum;
     QString prevSigName;
+
+    const bool dark = isDarkTheme();
+    const QColor baseColor = palette().color(QPalette::Base);
 
     //now, color the bitfield by seeing if a given bit is freshly set/unset in the new data
     //compared to the old. Bits that are not set in either are white, bits set in both are black
@@ -363,6 +394,7 @@ void CANDataGrid::paintGridCells()
             bit = (byteIdx * 8) + bitIdx;
             thisBit = false;
             prevBit = false;
+
             if ((thisByte & (1 << bitIdx)) == (1 << bitIdx)) thisBit = true;
             if ((prevByte & (1 << bitIdx)) == (1 << bitIdx)) prevBit = true;
 
@@ -376,84 +408,109 @@ void CANDataGrid::paintGridCells()
                 {
                     if (prevBit)
                     {
-                        if ((signalColors.count() > 0) && (gridMode == GridMode::SIGNAL_VIEW)) painter->setBrush(blackHashBrush);
-                        else painter->setBrush(blackBrush);
+                        if ((signalColors.count() > 0) && (gridMode == GridMode::SIGNAL_VIEW))
+                            painter->setBrush(signalSetHashBrush);
+                        else
+                            painter->setBrush(setBrush);
                     }
                     else
                     {
-                        if ((signalColors.count() > 0) && (gridMode == GridMode::SIGNAL_VIEW)) painter->setBrush(greenHashBrush);
-                        else painter->setBrush(greenBrush);
+                        painter->setBrush(changedBrush);
                     }
                 }
                 else
                 {
                     if (prevBit)
                     {
-                        painter->setBrush(redBrush);
+                        painter->setBrush(clearedBrush);
                     }
                     else
                     {
                         usedSigNum = -1;
                         if ((usedData[byteIdx] & (1 << bitIdx)) == (1 << bitIdx))
                         {
-                            if (gridMode == GridMode::SIGNAL_VIEW) usedSigNum = getUsedSignalNum(bit);
+                            if (gridMode == GridMode::SIGNAL_VIEW)
+                                usedSigNum = getUsedSignalNum(bit);
+
                             if (usedSigNum == -1)
                             {
-                                grayBrush = QBrush(QColor(0xB6, 0xB6, 0xB6), Qt::BDiagPattern);
-                                painter->setBrush(grayBrush);
+                                painter->setBrush(usedUnknownHashBrush);
                             }
                             else
                             {
-                                int idx = usedSigNum % signalColors.length(); //can only use as many colors as have been defined
-                                painter->setBrush(QBrush(signalColors[idx]));
+                                int idx = usedSigNum % signalColors.length();
+                                QColor sigColor = signalColors[idx];
+                                if (dark)
+                                {
+                                    sigColor = blendColors(sigColor, baseColor, 0.35);
+                                }
+                                painter->setBrush(QBrush(sigColor));
                             }
                         }
-                        else painter->setBrush(whiteBrush);
+                        else
+                        {
+                            painter->setBrush(emptyBrush);
+                        }
                     }
                 }
             }
 
+            painter->setPen(QPen(gridBorderColor));
             painter->drawRect(nearX + (x * xSector), nearY + (y * ySector), xSector, ySector);
+
             switch (textStates[byteIdx][bitIdx])
             {
             case GridTextState::NORMAL:
-                if (thisBit && prevBit) painter->setPen(QPen(Qt::gray));
-                else painter->setPen(QPen(Qt::black));
+                painter->setPen(QPen((thisBit && prevBit) ? gridTextMutedColor : gridTextColor));
                 painter->setFont(mainFont);
                 break;
+
             case GridTextState::BOLD_BLUE:
-                painter->setPen(QPen(Qt::blue));
+                painter->setPen(QPen(emphasizedTextColor));
                 painter->setFont(boldFont);
                 break;
+
             case GridTextState::INVERT:
+            {
                 painter->setFont(mainFont);
                 QColor brushColor = painter->brush().color();
-                painter->setPen(QColor(255-brushColor.red(), 255-brushColor.green(), 255-brushColor.blue()));
+                painter->setPen(QColor(255 - brushColor.red(),
+                                       255 - brushColor.green(),
+                                       255 - brushColor.blue()));
                 break;
             }
-            //change style of bit number output for current signal
-            //if (thisBit) painter->setFont(boldFont);
-           // else painter->setFont(mainFont);
-            //painter->setFont(smallFont);
-            if (gridMode != GridMode::SIGNAL_VIEW)
-                painter->drawText(QRect(nearX + (x * xSector), nearY + (y * ySector), xSector, ySector), Qt::AlignCenter, QString::number(bit)); //center center of grid
-            else
-                painter->drawText(QRect(nearX + (x * xSector), nearY + (y * ySector), xSector, ySector), Qt::AlignLeft, QString::number(bit)); //upper left of grid
+            }
 
+            if (gridMode != GridMode::SIGNAL_VIEW)
+            {
+                painter->drawText(
+                    QRect(nearX + (x * xSector), nearY + (y * ySector), xSector, ySector),
+                    Qt::AlignCenter,
+                    QString::number(bit));
+            }
+            else
+            {
+                painter->drawText(
+                    QRect(nearX + (x * xSector), nearY + (y * ySector), xSector, ySector),
+                    Qt::AlignLeft,
+                    QString::number(bit));
+            }
+
+            // Reset painter state for next cell
             painter->setFont(mainFont);
-            painter->setPen(QPen(Qt::black));
+            painter->setPen(QPen(gridTextColor));
         }
     }
-
 
     /*
      * now if signal names are loaded we'll go through all the bits again and try to label over top of the grid
      * We already have a big bitmap that tells us which signals occupy which bits so every time there is a new
      * signal look ahead to see if there's room in the row to just run the signal name through as long as needed.
-    */
-    if ( (signalNames.count() > 0) && (gridMode == GridMode::SIGNAL_VIEW) )
+     */
+    if ((signalNames.count() > 0) && (gridMode == GridMode::SIGNAL_VIEW))
     {
         painter->setFont(sigNameFont);
+        painter->setPen(QPen(gridTextColor));
 
         for (y = 0; y < neededYDivisions; y++)
         {
@@ -463,10 +520,11 @@ void CANDataGrid::paintGridCells()
                 int bitIdx = ((neededXDivisions - 1) - x) & 7;
                 bit = (byteIdx * 8) + bitIdx;
                 usedSigNum = -1;
+
                 if ((usedData[byteIdx] & (1 << bitIdx)) == (1 << bitIdx))
                 {
                     usedSigNum = getUsedSignalNum(bit);
-                    if ((usedSigNum > -1) && (prevSigName != signalNames[usedSigNum]) )
+                    if ((usedSigNum > -1) && (prevSigName != signalNames[usedSigNum]))
                     {
                         prevSigName = signalNames[usedSigNum];
 
@@ -476,34 +534,59 @@ void CANDataGrid::paintGridCells()
                         qDebug() << "Width this row: " << usableWidth;
                         usableWidth *= xSector;
 
-                        if (textWidth > usableWidth) //signal name is too long for space we've got on this row. Try to wrap it
+                        if (textWidth > usableWidth)
                         {
                             int numAvgChars = xSector / smallMetric->averageCharWidth();
-                            painter->drawText(nearX + x * xSector + 5, nearY + (y * ySector) + smallMetric->height() * 1.6, prevSigName.left(numAvgChars - 1));
+                            painter->drawText(
+                                nearX + x * xSector + 5,
+                                nearY + (y * ySector) + smallMetric->height() * 1.6,
+                                prevSigName.left(numAvgChars - 1));
+
                             QString remainder = prevSigName.mid(numAvgChars - 1, -1);
                             textWidth = smallMetric->horizontalAdvance(prevSigName);
+
                             if (textWidth > xSector)
                             {
-                                painter->drawText(nearX + x * xSector + 12, nearY + (y * ySector) + smallMetric->height() * 2.6, remainder.left(numAvgChars - 1));
+                                painter->drawText(
+                                    nearX + x * xSector + 12,
+                                    nearY + (y * ySector) + smallMetric->height() * 2.6,
+                                    remainder.left(numAvgChars - 1));
                             }
-                            else painter->drawText(nearX + x * xSector + 12, nearY + (y * ySector) + smallMetric->height() * 2.6, remainder);
-
+                            else
+                            {
+                                painter->drawText(
+                                    nearX + x * xSector + 12,
+                                    nearY + (y * ySector) + smallMetric->height() * 2.6,
+                                    remainder);
+                            }
                         }
                         else
                         {
-                            //first see if we even have enough room to use a bigger font and use that if so. Otherwise stick with the normal font
                             textWidth = largeMetric->horizontalAdvance(prevSigName);
                             if (textWidth < usableWidth)
                             {
                                 painter->setFont(mainFont);
                                 QSize size = QSize(usableWidth, ySector - smallMetric->height() * 1.0);
-                                painter->drawText(QRect(nearX + x * xSector, nearY + (y * ySector) + smallMetric->height() * 1.0, size.width(), size.height()), Qt::AlignCenter, prevSigName);
+                                painter->drawText(
+                                    QRect(nearX + x * xSector,
+                                          nearY + (y * ySector) + smallMetric->height() * 1.0,
+                                          size.width(),
+                                          size.height()),
+                                    Qt::AlignCenter,
+                                    prevSigName);
                                 painter->setFont(sigNameFont);
+                                painter->setPen(QPen(gridTextColor));
                             }
                             else
                             {
                                 QSize size = QSize(usableWidth, ySector - smallMetric->height() * 1.0);
-                                painter->drawText(QRect(nearX + x * xSector, nearY + (y * ySector) + smallMetric->height() * 1.0, size.width(), size.height()), Qt::AlignCenter, prevSigName);
+                                painter->drawText(
+                                    QRect(nearX + x * xSector,
+                                          nearY + (y * ySector) + smallMetric->height() * 1.0,
+                                          size.width(),
+                                          size.height()),
+                                    Qt::AlignCenter,
+                                    prevSigName);
                             }
                         }
                     }
@@ -610,7 +693,7 @@ void CANDataGrid::updateData(unsigned char *newData, bool bUpdate = true)
     int bytesToTransfer = (bytesToDraw + 7) & 0xF8; //force copying in 8 byte increments
     memcpy(data, newData, bytesToTransfer);
     //clear all data past that point just to be sure we don't have garbage left over
-    if (bytesToTransfer < 64) memset(refData + bytesToTransfer, 0, 64 - bytesToTransfer);
+    if (bytesToTransfer < 64) memset(data + bytesToTransfer, 0, 64 - bytesToTransfer);
     if (bUpdate) this->update();
 }
 
@@ -619,7 +702,7 @@ void CANDataGrid::setUsed(unsigned char *newData, bool bUpdate = false)
     int bytesToTransfer = (bytesToDraw + 7) & 0xF8; //force copying in 8 byte increments
     memcpy(usedData, newData, bytesToTransfer);
     //clear all data past that point just to be sure we don't have garbage left over
-    if (bytesToTransfer < 64) memset(refData + bytesToTransfer, 0, 64 - bytesToTransfer);
+    if (bytesToTransfer < 64) memset(usedData + bytesToTransfer, 0, 64 - bytesToTransfer);
     if (bUpdate) this->update();
 }
 
@@ -627,4 +710,15 @@ void CANDataGrid::setHeat(unsigned char *newData)
 {
     memcpy(heatData, newData, 512);
     this->update();
+}
+
+void CANDataGrid::changeEvent(QEvent *event)
+{
+    QWidget::changeEvent(event);
+
+    if (event->type() == QEvent::PaletteChange ||
+        event->type() == QEvent::ApplicationPaletteChange ||
+        event->type() == QEvent::StyleChange) {
+        refreshThemeColors();
+    }
 }

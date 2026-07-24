@@ -21,6 +21,7 @@ enum class Column {
     Length    = 6, ///< The frames payload data length
     ASCII     = 7, ///< The payload interpreted as ASCII characters
     Data      = 8, ///< The frames payload data
+    Idx = 9, ///< The frames original number --AI Helped Here
     NUM_COLUMN
 };
 
@@ -64,10 +65,22 @@ public:
     void insertFrames(const QVector<CANFrame> &newFrames);
     void sortByColumn(int column);
     int getIndexFromTimeID(unsigned int ID, double timestamp);
+    int findFirstFilteredRowByFrameId(uint32_t frameId) const;
+    int findFilteredRowByOriginalIndex(int originalIndex) const; ///< The frames original number --AI Helped Here
+    const CANFrame* getFilteredFrameRef(int row) const; ///< The frames original number --AI Helped Here
     const QVector<CANFrame> *getListReference() const; //thou shalt not modify these frames externally!
     const QVector<CANFrame> *getFilteredListReference() const; //Thus saith the Lord, NO.
     const QMap<int, bool> *getFiltersReference() const; //this neither
     const QMap<int, bool> *getBusFiltersReference() const; //this neither
+
+    enum CustomRoles
+    {
+        RawPayloadRole = Qt::UserRole + 1,
+        ChangedBytesRole
+    };
+
+    QByteArray getRawPayloadForRow(int filteredRow) const;
+    QByteArray getChangedByteMaskForRow(int filteredRow) const;
 
 public slots:
     void addFrame(const CANFrame&, bool);

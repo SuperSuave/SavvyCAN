@@ -59,7 +59,7 @@ private:
     QTimer *playbackTimer;
     bool playbackActive;
     bool playbackForward;
-    static const QColor graphColors[8];
+    static QColor graphColorForIndex(int idx);
     bool secondsMode;
     bool openGLMode;
     bool useHexTicker;

@@ -17,7 +17,7 @@ FuzzingWindow::FuzzingWindow(const QVector<CANFrame> *frames, QWidget *parent) :
 
     modelFrames = frames;
 
-    fuzzTimer = new QTimer();
+    fuzzTimer = new QTimer(this);
 
     connect(ui->btnMarkAllHigh, &QPushButton::clicked, this, &FuzzingWindow::markAllHigh);
     connect(ui->btnMarkAllLow, &QPushButton::clicked, this, &FuzzingWindow::markAllLow);
@@ -71,20 +71,17 @@ FuzzingWindow::~FuzzingWindow()
 
 bool FuzzingWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::KeyRelease) {
-        QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        switch (keyEvent->key())
-        {
-        case Qt::Key_F1:
-            HelpWindow::getRef()->showHelp("fuzzingwindow.md");
-            break;
-        }
-        return true;
-    } else {
-        // standard event processing
+    if (event->type() != QEvent::KeyRelease)
         return QObject::eventFilter(obj, event);
+
+    auto *keyEvent = static_cast<QKeyEvent *>(event);
+    if (keyEvent->key() == Qt::Key_F1)
+    {
+        HelpWindow::getRef()->showHelp("fuzzingwindow.md");
+        return true;
     }
-    return false;
+
+    return QObject::eventFilter(obj, event);
 }
 
 void FuzzingWindow::updatedFrames(int numFrames)
@@ -152,7 +149,7 @@ void FuzzingWindow::changedNumDataBytes(int newVal)
     ui->bitfield->setBytesToDraw(newVal);
 
     int byt;
-    for (int i = 0; i < 511; i++)
+    for (int i = 0; i < 512; i++)
     {
         byt = i / 8;
         if (byt >= newVal)
@@ -171,11 +168,14 @@ void FuzzingWindow::changedNumDataBytes(int newVal)
 void FuzzingWindow::timerTriggered()
 {
     static uint64_t lastByteUpdate = 0;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
     CANFrame thisFrame;
     sendingBuffer.clear();
     //Every 250ms update the text fields to show our progress and what's going on.
-    if (QDateTime::currentMSecsSinceEpoch() - lastByteUpdate > 250)
+    if (now - lastByteUpdate > 250)
     {
+        lastByteUpdate = now;
+
         ui->txtByte0->setText(QString::number(currentBytes[0], 16));
         ui->txtByte1->setText(QString::number(currentBytes[1], 16));
         ui->txtByte2->setText(QString::number(currentBytes[2], 16));
@@ -417,6 +417,7 @@ void FuzzingWindow::refreshIDList()
 {
     ui->listID->clear();
     foundIDs.clear();
+    selectedIDs.clear();
 
     int id;
     for (int i = 0; i < modelFrames->count(); i++)

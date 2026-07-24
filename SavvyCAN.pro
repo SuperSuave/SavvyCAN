@@ -24,12 +24,15 @@ QMAKE_INFO_PLIST = Info.plist.template
 ICON = icons/SavvyIcon.icns
 
 SOURCES += main.cpp\
+    bookmarkmanager.cpp \
+    bookmarkmanagerdialog.cpp \
     canbridgewindow.cpp \
     connections/canlogserver.cpp \
     connections/canserver.cpp \
     connections/lawicel_serial.cpp \
     connections/mqtt_bus.cpp \
     dbc/dbcnodeduplicateeditor.cpp \
+    framebytedatadelegate.cpp \
     framesenderobject.cpp \
     mqtt/qmqtt_client.cpp \
     mqtt/qmqtt_client_p.cpp \
@@ -48,6 +51,7 @@ SOURCES += main.cpp\
     mainwindow.cpp \
     canframemodel.cpp \
     simplecrypt.cpp \
+    themes/thememanager.cpp \
     triggerdialog.cpp \
     utility.cpp \
     qcustomplot.cpp \
@@ -108,6 +112,8 @@ SOURCES += main.cpp\
     pcaplite.cpp
 
 HEADERS  += mainwindow.h \
+    bookmarkmanager.h \
+    bookmarkmanagerdialog.h \
     can_structs.h \
     canbridgewindow.h \
     canframemodel.h \
@@ -118,6 +124,7 @@ HEADERS  += mainwindow.h \
     connections/mqtt_bus.h \
     dbc/dbcnodeduplicateeditor.h \
     dbc/dbcnoderebaseeditor.h \
+    framebytedatadelegate.h \
     framesenderobject.h \
     mqtt/qmqtt.h \
     mqtt/qmqtt_client.h \
@@ -141,6 +148,7 @@ HEADERS  += mainwindow.h \
     qcpaxistickerhex.h \
     re/dbccomparatorwindow.h \
     simplecrypt.h \
+    themes/thememanager.h \
     triggerdialog.h \
     utility.h \
     qcustomplot.h \
@@ -204,6 +212,7 @@ HEADERS  += mainwindow.h \
 
 FORMS    += ui/candatagrid.ui \
     triggerdialog.ui \
+    ui/bookmarkmanagerdialog.ui \
     ui/canbridgewindow.ui \
     ui/dbcnodeduplicateeditor.ui \
     ui/dbccomparatorwindow.ui \

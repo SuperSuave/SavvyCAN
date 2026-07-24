@@ -46,6 +46,8 @@ public:
     QList<QCPItemText *> bracketTexts;
 };
 
+class QCustomPlot;
+
 class GraphingWindow : public QDialog
 {
     Q_OBJECT
@@ -111,6 +113,8 @@ private:
     void writeSettings();
     bool eventFilter(QObject *obj, QEvent *event);
     void changeEvent(QEvent *event);
+
+    void applyPlotTheme(QCustomPlot *plot);
 };
 
 #endif // GRAPHINGWINDOW_H

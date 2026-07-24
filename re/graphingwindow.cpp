@@ -59,6 +59,7 @@ GraphingWindow::GraphingWindow(const QVector<CANFrame> *frames, QWidget *parent)
     locationText->position->setCoords(QPointF(0.16, 0.03));
     locationText->setText("X: 0  Y: 0");
     locationText->setFont(legendSelectedFont);
+    locationText->setColor(palette().color(QPalette::Text));
 
     itemTracer = new QCPItemTracer(ui->graphingView);
     itemTracer->setInterpolating(true);
@@ -91,7 +92,7 @@ GraphingWindow::GraphingWindow(const QVector<CANFrame> *frames, QWidget *parent)
 
     selectedPen.setWidth(3);
     selectedPen.setStyle(Qt::DashLine);
-    selectedPen.setColor(Qt::blue);
+    selectedPen.setColor(palette().color(QPalette::Highlight));
 
     //ui->graphingView->setAttribute(Qt::WA_AcceptTouchEvents);
 
@@ -112,6 +113,12 @@ GraphingWindow::GraphingWindow(const QVector<CANFrame> *frames, QWidget *parent)
 
     needScaleSetup = true;
     followGraphEnd = false;
+
+    applyPlotTheme(ui->graphingView);
+    locationText->setColor(palette().color(QPalette::Text));
+    itemTracer->setPen(QPen(palette().color(QPalette::Highlight)));
+    itemTracer->setBrush(QBrush(palette().color(QPalette::Highlight)));
+
 }
 
 GraphingWindow::~GraphingWindow()
@@ -465,39 +472,42 @@ void GraphingWindow::mouseWheel()
 
 bool GraphingWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::KeyRelease) {
+    if (event->type() == QEvent::KeyRelease)
+    {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
         switch (keyEvent->key())
         {
         case Qt::Key_Plus:
             zoomIn();
-            break;
+            return true;
         case Qt::Key_Minus:
             zoomOut();
-            break;
+            return true;
         case Qt::Key_F1:
             HelpWindow::getRef()->showHelp("graphwindow.md");
+            return true;
+        default:
             break;
         }
-        return true;
-    } else if (event->type() == QEvent::TouchBegin)
+    }
+    else if (event->type() == QEvent::TouchBegin)
     {
         qDebug() << "Touch begin";
-    } else if (event->type() == QEvent::TouchCancel)
+    }
+    else if (event->type() == QEvent::TouchCancel)
     {
         qDebug() << "Touch cancel";
-    } else if (event->type() == QEvent::TouchEnd)
+    }
+    else if (event->type() == QEvent::TouchEnd)
     {
         qDebug() << "Touch End";
-    } else if (event->type() == QEvent::TouchUpdate)
+    }
+    else if (event->type() == QEvent::TouchUpdate)
     {
         qDebug() << "Touch Update";
-    } else {
-        // standard event processing
-        return QObject::eventFilter(obj, event);
     }
 
-    return false;
+    return QObject::eventFilter(obj, event);
 }
 
 void GraphingWindow::resetView()
@@ -1314,6 +1324,7 @@ void GraphingWindow::appendToGraph(GraphParams &params, CANFrame &frame, QVector
                         valueText->setText(tempStr);
                         qDebug() << "JiggaWatts: " << tempStr;
                         valueText->setFont(QFont(font().family(), 10));
+                        valueText->setColor(palette().color(QPalette::Text));
                         params.bracketTexts.append(valueText);
                     }
                 }
@@ -1450,6 +1461,7 @@ void GraphingWindow::createGraph(GraphParams &params, bool createGraphParam)
                     valueText->setPositionAlignment(Qt::AlignBottom|Qt::AlignHCenter);
                     valueText->setText(params.prevValStr);
                     valueText->setFont(QFont(font().family(), 10));
+                    valueText->setColor(palette().color(QPalette::Text));
                     params.bracketTexts.append(valueText);
                     params.prevValLocation = QPointF(x, y);
                     params.prevValStr = tempStr;
@@ -1479,6 +1491,7 @@ void GraphingWindow::createGraph(GraphParams &params, bool createGraphParam)
         valueText->setPositionAlignment(Qt::AlignBottom|Qt::AlignHCenter);
         valueText->setText(params.prevValStr);
         valueText->setFont(QFont(font().family(), 10));
+        valueText->setColor(palette().color(QPalette::Text));
         params.prevValLocation = QPointF(x, y);
         params.prevValStr = tempStr;
         params.prevValTable = tempVal;
@@ -1524,6 +1537,11 @@ void GraphingWindow::createGraph(GraphParams &params, bool createGraphParam)
     else
     {
         ui->graphingView->graph()->setLineStyle(QCPGraph::lsLine); //connect points with lines
+    }
+
+    if (params.lineColor == QColor(0, 0, 0))
+    {
+        params.lineColor = palette().color(QPalette::Text);
     }
 
     QPen graphPen;
@@ -1608,4 +1626,59 @@ GraphParams::GraphParams()
     prevValLocation = QPointF(0,0);
     prevValStr = "";
     lastBracket = nullptr;
+}
+
+void GraphingWindow::applyPlotTheme(QCustomPlot *plot)
+{
+    const QPalette pal = this->palette();
+    const QColor bg = pal.color(QPalette::Base);
+    const QColor fg = pal.color(QPalette::Text);
+    const QColor grid(fg.red(), fg.green(), fg.blue(), 60);
+
+    plot->setBackground(QBrush(bg));
+    plot->axisRect()->setBackground(QBrush(bg));
+
+    plot->xAxis->setBasePen(QPen(fg));
+    plot->yAxis->setBasePen(QPen(fg));
+    plot->xAxis2->setBasePen(QPen(fg));
+    plot->yAxis2->setBasePen(QPen(fg));
+
+    plot->xAxis->setTickPen(QPen(fg));
+    plot->yAxis->setTickPen(QPen(fg));
+    plot->xAxis2->setTickPen(QPen(fg));
+    plot->yAxis2->setTickPen(QPen(fg));
+
+    plot->xAxis->setSubTickPen(QPen(fg));
+    plot->yAxis->setSubTickPen(QPen(fg));
+    plot->xAxis2->setSubTickPen(QPen(fg));
+    plot->yAxis2->setSubTickPen(QPen(fg));
+
+    plot->xAxis->setTickLabelColor(fg);
+    plot->yAxis->setTickLabelColor(fg);
+    plot->xAxis2->setTickLabelColor(fg);
+    plot->yAxis2->setTickLabelColor(fg);
+
+    plot->xAxis->setLabelColor(fg);
+    plot->yAxis->setLabelColor(fg);
+    plot->xAxis2->setLabelColor(fg);
+    plot->yAxis2->setLabelColor(fg);
+
+    plot->xAxis->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+    plot->yAxis->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+    plot->xAxis2->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+    plot->yAxis2->grid()->setPen(QPen(grid, 1, Qt::DotLine));
+
+    plot->xAxis->grid()->setSubGridVisible(false);
+    plot->yAxis->grid()->setSubGridVisible(false);
+    plot->xAxis2->grid()->setSubGridVisible(false);
+    plot->yAxis2->grid()->setSubGridVisible(false);
+
+    if (plot->legend)
+    {
+        plot->legend->setTextColor(fg);
+        plot->legend->setBorderPen(QPen(grid));
+        plot->legend->setBrush(QBrush(bg));
+    }
+
+    plot->replot();
 }

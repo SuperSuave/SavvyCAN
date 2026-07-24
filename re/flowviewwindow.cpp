@@ -4,10 +4,13 @@
 #include "helpwindow.h"
 #include "filterutility.h"
 #include "qcpaxistickerhex.h"
+#include "themes/thememanager.h"
 
-const QColor FlowViewWindow::graphColors[8] = {Qt::blue, Qt::green, Qt::black, Qt::red, //0 1 2 3
-                                               Qt::gray, Qt::darkYellow, Qt::cyan, Qt::darkMagenta}; //4 5 6 7
-
+QColor FlowViewWindow::graphColorForIndex(int idx)
+{
+    const auto tc = ThemeManager::colors();
+    return tc.trace[idx % 8];
+}
 
 FlowViewWindow::FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent) :
     QDialog(parent),
@@ -49,7 +52,6 @@ FlowViewWindow::FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent)
     textLabel->position->setCoords(0.5, .5);
     textLabel->setText("+");
     textLabel->setFont(QFont(font().family(), 16)); // make font a bit larger
-    textLabel->setPen(QPen(Qt::black)); // show black border around text
 
     ui->graphView->xAxis->setLabel("Time Axis");
     if (useHexTicker) ui->graphView->yAxis->setLabel("Value Axis (HEX)");
@@ -74,6 +76,40 @@ FlowViewWindow::FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent)
     //ui->graphView->xAxis->setNumberFormat("gb");
     //ui->graphView->xAxis->setTickStep(5.0);
     //ui->graphView->xAxis->setSubTickCount(0);
+
+    const auto tc = ThemeManager::colors();
+
+    ui->graphView->setBackground(tc.windowBg);
+    ui->graphView->axisRect()->setBackground(tc.graphBg);
+
+    ui->graphView->legend->setTextColor(tc.graphText);
+    ui->graphView->legend->setBrush(QBrush(tc.panelBg));
+    ui->graphView->legend->setBorderPen(QPen(tc.border));
+
+    ui->graphView->xAxis->setBasePen(QPen(tc.axis));
+    ui->graphView->yAxis->setBasePen(QPen(tc.axis));
+    ui->graphView->xAxis->setTickPen(QPen(tc.axis));
+    ui->graphView->yAxis->setTickPen(QPen(tc.axis));
+    ui->graphView->xAxis->setSubTickPen(QPen(tc.axis));
+    ui->graphView->yAxis->setSubTickPen(QPen(tc.axis));
+    ui->graphView->xAxis->setTickLabelColor(tc.graphText);
+    ui->graphView->yAxis->setTickLabelColor(tc.graphText);
+    ui->graphView->xAxis->setLabelColor(tc.graphText);
+    ui->graphView->yAxis->setLabelColor(tc.graphText);
+
+    ui->graphView->xAxis2->setBasePen(QPen(tc.axis));
+    ui->graphView->yAxis2->setBasePen(QPen(tc.axis));
+    ui->graphView->xAxis2->setTickPen(QPen(tc.axis));
+    ui->graphView->yAxis2->setTickPen(QPen(tc.axis));
+    ui->graphView->xAxis2->setSubTickPen(QPen(tc.axis));
+    ui->graphView->yAxis2->setSubTickPen(QPen(tc.axis));
+    ui->graphView->xAxis2->setTickLabelColor(tc.graphText);
+    ui->graphView->yAxis2->setTickLabelColor(tc.graphText);
+    ui->graphView->xAxis2->setLabelColor(tc.graphText);
+    ui->graphView->yAxis2->setLabelColor(tc.graphText);
+
+    textLabel->setPen(QPen(tc.graphText));
+    textLabel->setColor(tc.graphText);
 
     if (openGLMode)
     {
@@ -599,7 +635,7 @@ void FlowViewWindow::createGraph(int byteNum)
     ui->graphView->graph()->setData(x[byteNum],y[byteNum]);
     ui->graphView->graph()->setLineStyle(QCPGraph::lsLine); //connect points with lines
     QPen graphPen;
-    graphPen.setColor(graphColors[byteNum]);
+    graphPen.setColor(graphColorForIndex(byteNum));
     graphPen.setWidth(1);
     ui->graphView->graph()->setPen(graphPen);
     ui->graphView->axisRect()->setupFullAxesBox();

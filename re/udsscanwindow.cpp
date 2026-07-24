@@ -6,6 +6,16 @@
 #include "utility.h"
 #include "helpwindow.h"
 
+static QColor blendColors(const QColor &a, const QColor &b, qreal amount)
+{
+    const qreal inv = 1.0 - amount;
+    return QColor(
+        int(a.red() * inv + b.red() * amount),
+        int(a.green() * inv + b.green() * amount),
+        int(a.blue() * inv + b.blue() * amount),
+        int(a.alpha() * inv + b.alpha() * amount)
+    );
+}
 
 static QVector<QString> SCANTYPE_NAMES = {
     QString("Tester Present"),
@@ -34,7 +44,7 @@ UDSScanWindow::UDSScanWindow(const QVector<CANFrame> *frames, QWidget *parent) :
 
     currentlyRunning = false;
 
-    waitTimer = new QTimer;
+    waitTimer = new QTimer(this);
     waitTimer->setInterval(100);
 
     udsHandler = new UDS_HANDLER;
@@ -74,7 +84,6 @@ UDSScanWindow::UDSScanWindow(const QVector<CANFrame> *frames, QWidget *parent) :
     connect(ui->spinReplyOffset, SIGNAL(valueChanged(int)), this, SLOT(setReplyOffset()));
     connect(ui->cbSessType, &QComboBox::currentTextChanged, this, &UDSScanWindow::setSessType);
 
-//not handling show no reply, max reply delay, reply offset, increment
     int numBuses = CANConManager::getInstance()->getNumBuses();
     for (int n = 0; n < numBuses; n++) ui->cbBuses->addItem(QString::number(n));
 
@@ -93,35 +102,47 @@ UDSScanWindow::~UDSScanWindow()
 {
     removeEventFilter(this);
     delete ui;
-    waitTimer->stop();
-    delete waitTimer;
     delete udsHandler;
 }
 
 bool UDSScanWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    if (event->type() == QEvent::KeyRelease) {
+    if (event->type() == QEvent::KeyRelease)
+    {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
-        switch (keyEvent->key())
+        if (keyEvent->key() == Qt::Key_F1)
         {
-        case Qt::Key_F1:
             HelpWindow::getRef()->showHelp("uds_scanner.md");
-            break;
+            return true;
         }
-        return true;
-    } else {
-        // standard event processing
-        return QObject::eventFilter(obj, event);
     }
-    return false;
+
+    return QObject::eventFilter(obj, event);
 }
 
-void UDSScanWindow::setControlState(QWidget & widget, bool valid)
+void UDSScanWindow::setControlState(QWidget &widget, bool valid)
 {
     QPalette pal = widget.palette();
-    pal.setColor(QPalette::ColorRole::Base , valid ? Qt::white : Qt::red);
+    const QPalette basePal = QApplication::palette(&widget);
+    const QColor base = basePal.color(QPalette::Base);
+    const QColor text = basePal.color(QPalette::Text);
+    const bool dark = base.lightness() < text.lightness();
+
+    if (valid)
+    {
+        pal.setColor(QPalette::Base, base);
+        pal.setColor(QPalette::Text, text);
+    }
+    else
+    {
+        const QColor errorSeed = dark ? QColor(220, 90, 90) : QColor(200, 40, 40);
+        pal.setColor(QPalette::Base, blendColors(errorSeed, base, dark ? 0.72 : 0.82));
+        pal.setColor(QPalette::Text, dark ? QColor(255, 235, 235) : QColor(90, 0, 0));
+    }
+
     widget.setPalette(pal);
 }
+
 
 void UDSScanWindow::displayScanEntry(int idx)
 {
@@ -801,6 +822,15 @@ void UDSScanWindow::gotUDSReply(UDS_MESSAGE msg)
 
     if ((id == (uint32_t)(sentFrame.frameId() + offset)) || ui->cbAllowAdaptiveOffset->isChecked())
     {
+
+        const QPalette pal = ui->treeResults->palette();
+        const QColor base = pal.color(QPalette::Base);
+        const QColor text = pal.color(QPalette::Text);
+        const bool dark = base.lightness() < text.lightness();
+
+        const QColor positiveColor = dark ? QColor(120, 210, 140) : QColor(0, 120, 40);
+        const QColor negativeColor = dark ? QColor(255, 140, 140) : QColor(150, 0, 0);
+
         serviceShortName = udsHandler->getServiceShortDesc(sentFrame.service);
         if (serviceShortName.length() < 3) serviceShortName = QString::number(sentFrame.service, 16);
         if (msg.service == (0x40 + sendingFrames[currIdx].service) )
@@ -815,9 +845,9 @@ void UDSScanWindow::gotUDSReply(UDS_MESSAGE msg)
                 reply.append(Utility::formatHexNum(data[i]));
             }
             nodePositive->setText(0, reply);
-            nodePositive->setForeground(0, QBrush(Qt::darkGreen));
+            nodePositive->setForeground(0, QBrush(positiveColor));
             nodeSubFunc->addChild(nodePositive);
-            nodeSubFunc->setForeground(0, QBrush(Qt::darkGreen));
+            nodeSubFunc->setForeground(0, QBrush(positiveColor));
             gotReply = true;
         }
         else if ( msg.isErrorReply && (msg.service == sendingFrames[currIdx].service) )
@@ -828,9 +858,9 @@ void UDSScanWindow::gotUDSReply(UDS_MESSAGE msg)
                 QTreeWidgetItem *nodeNegative = new QTreeWidgetItem();
                 qDebug() << ui->spinNumBytes->value();
                 nodeNegative->setText(0, "NEGATIVE - " + udsHandler->getNegativeResponseShort(data[0]));
-                nodeNegative->setForeground(0, QBrush(Qt::darkRed));
+                nodeNegative->setForeground(0, QBrush(negativeColor));
                 nodeSubFunc->addChild(nodeNegative);
-                nodeSubFunc->setForeground(0, QBrush(Qt::darkRed));
+                nodeSubFunc->setForeground(0, QBrush(negativeColor));
                 gotReply = true;
             }
         }
@@ -903,8 +933,14 @@ void UDSScanWindow::timeOut()
 {
     if (ui->ckShowNoReply->isChecked())
     {
+        const QPalette pal = ui->treeResults->palette();
+        const QColor base = pal.color(QPalette::Base);
+        const QColor text = pal.color(QPalette::Text);
+        const bool dark = base.lightness() < text.lightness();
+        const QColor mutedColor = dark ? QColor(140, 140, 140) : QColor(120, 120, 120);
+
         setupNodes(0xDEAD5EA1);
-        nodeSubFunc->setForeground(0, QBrush(Qt::gray));
+        nodeSubFunc->setForeground(0, QBrush(mutedColor));
     }
 
     sendNextMsg();

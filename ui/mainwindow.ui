@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1177</width>
-    <height>717</height>
+    <width>1280</width>
+    <height>800</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -19,7 +19,7 @@
   <property name="minimumSize">
    <size>
     <width>800</width>
-    <height>500</height>
+    <height>725</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -28,9 +28,12 @@
   <widget class="QWidget" name="centralWidget">
    <layout class="QVBoxLayout" name="verticalLayout_2" stretch="0">
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="3,1">
+     <layout class="QHBoxLayout" name="horizontalLayout_2" stretch="3,1,1">
+      <property name="leftMargin">
+       <number>0</number>
+      </property>
       <item>
-       <layout class="QVBoxLayout" name="verticalLayout_3" stretch="4,1">
+       <layout class="QVBoxLayout" name="verticalLayout_3" stretch="4,0,1">
         <item>
          <widget class="QTableView" name="canFramesView">
           <property name="font">
@@ -43,7 +46,7 @@
            <bool>true</bool>
           </property>
           <property name="verticalScrollMode">
-           <enum>QAbstractItemView::ScrollMode::ScrollPerPixel</enum>
+           <enum>QAbstractItemView::ScrollPerPixel</enum>
           </property>
           <property name="wordWrap">
            <bool>false</bool>
@@ -54,12 +57,121 @@
          </widget>
         </item>
         <item>
+         <layout class="QHBoxLayout" name="horizontalLayout_4">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetDefaultConstraint</enum>
+          </property>
+          <property name="topMargin">
+           <number>0</number>
+          </property>
+          <item>
+           <widget class="QLabel" name="labelBookmarkLabel">
+            <property name="maximumSize">
+             <size>
+              <width>16777215</width>
+              <height>30</height>
+             </size>
+            </property>
+            <property name="text">
+             <string>Bookmark Label:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="quickBookmarkLabel">
+            <property name="minimumSize">
+             <size>
+              <width>75</width>
+              <height>25</height>
+             </size>
+            </property>
+            <property name="maximumSize">
+             <size>
+              <width>500</width>
+              <height>30</height>
+             </size>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBoxAlternateLabels">
+            <property name="text">
+             <string>Alternate Label:</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="quickBookmarkAlternateLabel"/>
+          </item>
+          <item>
+           <widget class="QCheckBox" name="checkBoxAutoBookmark">
+            <property name="toolTip">
+             <string>Check this to enable automatic bookmarking after adding a bookmark during a capture.</string>
+            </property>
+            <property name="text">
+             <string>Auto-Bookmark</string>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </item>
+        <item>
          <widget class="QTableWidget" name="tableSimpleSender"/>
         </item>
        </layout>
       </item>
       <item>
+       <layout class="QVBoxLayout" name="layoutInspector" stretch="0,0,0,0,0,0">
+        <property name="spacing">
+         <number>5</number>
+        </property>
+        <property name="topMargin">
+         <number>0</number>
+        </property>
+        <property name="bottomMargin">
+         <number>0</number>
+        </property>
+        <item>
+         <widget class="QLabel" name="lblInspectContext">
+          <property name="text">
+           <string>No Frame Selected</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblInspectChanged">
+          <property name="text">
+           <string>Changed: -</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblInspectNeighborhoodTitle">
+          <property name="text">
+           <string>TextLabel</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="txtInspectNeighborhood"/>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblInspectBitsTitle">
+          <property name="text">
+           <string>Bit View</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QPlainTextEdit" name="txtInspectBits"/>
+        </item>
+       </layout>
+      </item>
+      <item>
        <layout class="QVBoxLayout" name="verticalLayout">
+        <property name="spacing">
+         <number>5</number>
+        </property>
         <item>
          <widget class="QLabel" name="lblRemoteConn">
           <property name="enabled">
@@ -69,7 +181,7 @@
            <string>Remote Connection Active:</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignmentFlag::AlignCenter</set>
+           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>
@@ -99,7 +211,7 @@
            <number>8</number>
           </property>
           <property name="alignment">
-           <set>Qt::AlignmentFlag::AlignLeading|Qt::AlignmentFlag::AlignLeft|Qt::AlignmentFlag::AlignVCenter</set>
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
           </property>
           <property name="readOnly">
            <bool>true</bool>
@@ -156,11 +268,11 @@
            <string/>
           </property>
           <property name="alignment">
-           <set>Qt::AlignmentFlag::AlignCenter</set>
+           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>
-        <item alignment="Qt::AlignmentFlag::AlignHCenter">
+        <item>
          <widget class="QLabel" name="label">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -171,9 +283,12 @@
           <property name="text">
            <string>Total Frames Captured:</string>
           </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
          </widget>
         </item>
-        <item alignment="Qt::AlignmentFlag::AlignHCenter">
+        <item>
          <widget class="QLabel" name="lbNumFrames">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -184,9 +299,12 @@
           <property name="text">
            <string/>
           </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
          </widget>
         </item>
-        <item alignment="Qt::AlignmentFlag::AlignHCenter">
+        <item>
          <widget class="QLabel" name="label_6">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -197,9 +315,12 @@
           <property name="text">
            <string>Frames Per Second:</string>
           </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
+          </property>
          </widget>
         </item>
-        <item alignment="Qt::AlignmentFlag::AlignHCenter">
+        <item>
          <widget class="QLabel" name="lbFPS">
           <property name="sizePolicy">
            <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
@@ -209,6 +330,9 @@
           </property>
           <property name="text">
            <string/>
+          </property>
+          <property name="alignment">
+           <set>Qt::AlignCenter</set>
           </property>
          </widget>
         </item>
@@ -263,7 +387,7 @@
         <item>
          <widget class="Line" name="line">
           <property name="orientation">
-           <enum>Qt::Orientation::Horizontal</enum>
+           <enum>Qt::Horizontal</enum>
           </property>
          </widget>
         </item>
@@ -294,7 +418,7 @@
            <string>Bus Filtering:</string>
           </property>
           <property name="alignment">
-           <set>Qt::AlignmentFlag::AlignCenter</set>
+           <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
           </property>
          </widget>
         </item>
@@ -313,19 +437,61 @@
            </size>
           </property>
           <property name="flow">
-           <enum>QListView::Flow::LeftToRight</enum>
+           <enum>QListView::LeftToRight</enum>
           </property>
          </widget>
         </item>
         <item>
-         <widget class="QLabel" name="label_7">
-          <property name="text">
-           <string>Frame Filtering:</string>
+         <layout class="QHBoxLayout" name="horizontalLayout" stretch="1,1,3">
+          <property name="sizeConstraint">
+           <enum>QLayout::SetDefaultConstraint</enum>
           </property>
-          <property name="alignment">
-           <set>Qt::AlignmentFlag::AlignCenter</set>
+          <property name="topMargin">
+           <number>0</number>
           </property>
-         </widget>
+          <item>
+           <widget class="QLabel" name="labelFrameFilter">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string>Frame Filtering:</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QLineEdit" name="frameFilterSearch">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <spacer name="horizontalSpacer">
+            <property name="orientation">
+             <enum>Qt::Horizontal</enum>
+            </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Expanding</enum>
+            </property>
+            <property name="sizeHint" stdset="0">
+             <size>
+              <width>40</width>
+              <height>20</height>
+             </size>
+            </property>
+           </spacer>
+          </item>
+         </layout>
         </item>
         <item>
          <widget class="QListWidget" name="listFilters">
@@ -338,7 +504,7 @@
           <property name="minimumSize">
            <size>
             <width>300</width>
-            <height>160</height>
+            <height>85</height>
            </size>
           </property>
           <property name="maximumSize">
@@ -381,8 +547,8 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1177</width>
-     <height>20</height>
+     <width>1280</width>
+     <height>23</height>
     </rect>
    </property>
    <widget class="QMenu" name="menu_RE_Tools">
@@ -442,10 +608,18 @@
     </property>
     <addaction name="actionSetup"/>
    </widget>
+   <widget class="QMenu" name="menuBookmarks">
+    <property name="title">
+     <string>Bookmarks</string>
+    </property>
+    <addaction name="actionBookmarkEditor"/>
+    <addaction name="actionAddBookmark"/>
+   </widget>
    <addaction name="menuFile"/>
    <addaction name="menu_RE_Tools"/>
    <addaction name="menuSend_Frames"/>
    <addaction name="menuConnection"/>
+   <addaction name="menuBookmarks"/>
   </widget>
   <widget class="QStatusBar" name="statusBar"/>
   <action name="action_Playback">
@@ -641,11 +815,30 @@
     <string>CAN Bridge</string>
    </property>
   </action>
+  <action name="actionBookmarkEditor">
+   <property name="text">
+    <string>Bookmark Manager</string>
+   </property>
+  </action>
+  <action name="actionDelete_Bookmark">
+   <property name="text">
+    <string>Delete Bookmark</string>
+   </property>
+  </action>
   <action name="actionUDS_Firmware_Update">
    <property name="text">
     <string>UDS Firmware Update</string>
    </property>
   </action>
+  <action name="actionAddBookmark">
+   <property name="text">
+    <string>Add Bookmark</string>
+   </property>
+   <property name="toolTip">
+    <string>Add Bookmark at Current Location</string>
+   </property>
+  </action>
+  <zorder>inspectDock</zorder>
  </widget>
  <layoutdefault spacing="6" margin="11"/>
  <resources/>

@@ -12,6 +12,7 @@
 
 #include "utility.h"
 #include "blfhandler.h"
+#include "bookmarkmanager.h"
 
 QFile FrameFileIO::continuousFile;
 
@@ -32,7 +33,8 @@ FrameFileIO::FrameFileIO()
 {
 }
 
-bool FrameFileIO::saveFrameFile(QString &fileName, const QVector<CANFrame>* frameCache)
+bool FrameFileIO::saveFrameFile(QString &fileName, const QVector<CANFrame>* frameCache,
+                                const BookmarkManager* bookmarkManager)
 {
     QString filename;
     QFileDialog dialog(qApp->activeWindow());
@@ -77,7 +79,7 @@ bool FrameFileIO::saveFrameFile(QString &fileName, const QVector<CANFrame>* fram
         if (dialog.selectedNameFilter() == filters[0])
         {
             if (!filename.contains('.')) filename += ".csv";
-            result = saveNativeCSVFile(filename, frameCache);
+            result = saveNativeCSVFile(filename, frameCache, bookmarkManager);
         }
         if (dialog.selectedNameFilter() == filters[1])
         {
@@ -158,7 +160,7 @@ bool FrameFileIO::saveFrameFile(QString &fileName, const QVector<CANFrame>* fram
     return false;
 }
 
-bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache)
+bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache, BookmarkManager* bookmarkManager)
 {
     QString filename;
     QFileDialog dialog;
@@ -213,32 +215,32 @@ bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache
 
         qApp->processEvents();
 
-        if (selectedNameFilter == filters[0]) result = autoDetectLoadFile(filename, frameCache);
-        if (selectedNameFilter == filters[1]) result = loadNativeCSVFile(filename, frameCache);
-        if (selectedNameFilter == filters[2]) result = loadCRTDFile(filename, frameCache);
-        if (selectedNameFilter == filters[3]) result = loadLogFile(filename, frameCache);
-        if (selectedNameFilter == filters[4]) result = loadMicrochipFile(filename, frameCache);
-        if (selectedNameFilter == filters[5]) result = loadTraceFile(filename, frameCache);
-        if (selectedNameFilter == filters[6]) result = loadIXXATFile(filename, frameCache);
-        if (selectedNameFilter == filters[7]) result = loadCANDOFile(filename, frameCache);
-        if (selectedNameFilter == filters[8]) result = loadVehicleSpyFile(filename, frameCache);
-        if (selectedNameFilter == filters[9]) result = loadCanDumpFile(filename, frameCache);
-        if (selectedNameFilter == filters[10]) result = loadLawicelFile(filename, frameCache);
-        if (selectedNameFilter == filters[11]) result = loadPCANFile(filename, frameCache);
-        if (selectedNameFilter == filters[12]) result = loadKvaserFile(filename, frameCache, false);
-        if (selectedNameFilter == filters[13]) result = loadKvaserFile(filename, frameCache, true);
-        if (selectedNameFilter == filters[14]) result = loadCanalyzerASC(filename, frameCache);
-        if (selectedNameFilter == filters[15]) result = loadCanalyzerBLF(filename, frameCache);
-        if (selectedNameFilter == filters[16]) result = loadCARBUSAnalyzerFile(filename, frameCache);
-        if (selectedNameFilter == filters[17]) result = loadCANHackerFile(filename, frameCache);
-        if (selectedNameFilter == filters[18]) result = loadGenericCSVFile(filename, frameCache);
-        if (selectedNameFilter == filters[19]) result = loadCabanaFile(filename, frameCache);
-        if (selectedNameFilter == filters[20]) result = loadCANOpenFile(filename, frameCache);
-        if (selectedNameFilter == filters[21]) result = loadTeslaAPFile(filename, frameCache);
-        if (selectedNameFilter == filters[22]) result = loadCLX000File(filename, frameCache);
-        if (selectedNameFilter == filters[23]) result = loadCANServerFile(filename, frameCache);
-        if (selectedNameFilter == filters[24]) result = loadWiresharkFile(filename, frameCache);
-        if (selectedNameFilter == filters[25]) result = loadWiresharkSocketCANFile(filename, frameCache);
+        if (selectedNameFilter == filters[0]) result = autoDetectLoadFile(filename, frameCache, bookmarkManager);
+        if (selectedNameFilter == filters[1]) result = loadNativeCSVFile(filename, frameCache, bookmarkManager);
+        if (selectedNameFilter == filters[2]) { result = loadCRTDFile(filename, frameCache);                if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[3]) { result = loadLogFile(filename, frameCache);                 if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[4]) { result = loadMicrochipFile(filename, frameCache);           if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[5]) { result = loadTraceFile(filename, frameCache);               if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[6]) { result = loadIXXATFile(filename, frameCache);               if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[7])  { result = loadCANDOFile(filename, frameCache);              if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[8])  { result = loadVehicleSpyFile(filename, frameCache);         if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[9])  { result = loadCanDumpFile(filename, frameCache);            if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[10]) { result = loadLawicelFile(filename, frameCache);            if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[11]) { result = loadPCANFile(filename, frameCache);               if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[12]) { result = loadKvaserFile(filename, frameCache, false);      if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[13]) { result = loadKvaserFile(filename, frameCache, true);       if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[14]) { result = loadCanalyzerASC(filename, frameCache);           if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[15]) { result = loadCanalyzerBLF(filename, frameCache);           if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[16]) { result = loadCARBUSAnalyzerFile(filename, frameCache);     if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[17]) { result = loadCANHackerFile(filename, frameCache);          if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[18]) { result = loadGenericCSVFile(filename, frameCache);         if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[19]) { result = loadCabanaFile(filename, frameCache);             if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[20]) { result = loadCANOpenFile(filename, frameCache);            if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[21]) { result = loadTeslaAPFile(filename, frameCache);            if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[22]) { result = loadCLX000File(filename, frameCache);             if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[23]) { result = loadCANServerFile(filename, frameCache);          if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[24]) { result = loadWiresharkFile(filename, frameCache);          if (result && bookmarkManager) bookmarkManager->clear(); }
+        if (selectedNameFilter == filters[25]) { result = loadWiresharkSocketCANFile(filename, frameCache); if (result && bookmarkManager) bookmarkManager->clear(); }
 
 
         progress.cancel();
@@ -268,7 +270,7 @@ bool FrameFileIO::loadFrameFile(QString &fileName, QVector<CANFrame>* frameCache
 //Try every format by first using the "is" functions which try to detect whether a given file is a good match to that
 //file format or not. Those functions are much less tolerant than the load functions and so should help to discriminate
 //whether a file could be loaded or not by a given loader. The loader return is still used in case the guess was wrong.
-bool FrameFileIO::autoDetectLoadFile(QString filename, QVector<CANFrame>* frames)
+bool FrameFileIO::autoDetectLoadFile(QString filename, QVector<CANFrame>* frames, BookmarkManager* bookmarkManager)
 {
     qDebug() << "Attempting Canalyzer BLF";
     if (isCanalyzerBLF(filename))
@@ -283,7 +285,7 @@ bool FrameFileIO::autoDetectLoadFile(QString filename, QVector<CANFrame>* frames
     qDebug() << "Attempting native CSV";
     if (isNativeCSVFile(filename))
     {
-        if (loadNativeCSVFile(filename, frames))
+        if (loadNativeCSVFile(filename, frames, bookmarkManager))
         {
             qDebug() << "Loaded as native CSV successfully!";
             return true;
@@ -2058,7 +2060,7 @@ bool FrameFileIO::isNativeCSVFile(QString filename)
 //The "native" file format for this program
 //Time Stamp,ID,Extended,Dir,Bus,LEN,D1,D2,D3,D4,D5,D6,D7,D8
 //39747828,000005EB,false,Rx,0,8,E8,45,85,4B,4A,28,36,69,
-bool FrameFileIO::loadNativeCSVFile(QString filename, QVector<CANFrame>* frames)
+bool FrameFileIO::loadNativeCSVFile(QString filename, QVector<CANFrame>* frames, BookmarkManager* bookmarkManager)
 {
     QFile *inFile = new QFile(filename);
     CANFrame thisFrame;
@@ -2068,6 +2070,9 @@ bool FrameFileIO::loadNativeCSVFile(QString filename, QVector<CANFrame>* frames)
     int lineCounter = 0;
     bool foundErrors = false;
     thisFrame.setFrameType(QCanBusFrame::DataFrame);
+
+    QVector<BookmarkRecord> loadedBookmarks;
+    bool inBookmarkSection = false;
 
     if (!inFile->open(QIODevice::ReadOnly | QIODevice::Text))
     {
@@ -2089,6 +2094,43 @@ bool FrameFileIO::loadNativeCSVFile(QString filename, QVector<CANFrame>* frames)
         line = inFile->readLine().simplified();
         if (line.length() > 2)
         {
+            QByteArray trimmedLine = line.trimmed();
+
+            if (trimmedLine == "#BOOKMARKS_START")
+            {
+                inBookmarkSection = true;
+                continue;
+            }
+
+            if (trimmedLine == "#BOOKMARKS_END")
+            {
+                inBookmarkSection = false;
+                continue;
+            }
+
+            if (inBookmarkSection && trimmedLine.startsWith("#BOOKMARK,"))
+            {
+                QList<QByteArray> tokens = trimmedLine.split(',');
+
+                if (tokens.size() >= 6)
+                {
+                    BookmarkRecord rec;
+                    rec.timestampUS = tokens[1].toULongLong();
+                    rec.frameIndex = tokens[2].toInt();
+                    rec.bus = tokens[3].toInt();
+                    rec.frameId = tokens[4].toUInt();
+                    rec.label = QString::fromUtf8(QByteArray::fromPercentEncoding(tokens[5]));
+
+                    loadedBookmarks.append(rec);
+                }
+
+                continue;
+            }
+
+            if (trimmedLine.startsWith("#"))
+            {
+                continue;
+            }
             QList<QByteArray> tokens = line.split(',');
             if (tokens.length() >= 5)
             {
@@ -2150,10 +2192,15 @@ bool FrameFileIO::loadNativeCSVFile(QString filename, QVector<CANFrame>* frames)
     }
     inFile->close();
     delete inFile;
+    if (bookmarkManager)
+    {
+        if (!loadedBookmarks.isEmpty()) bookmarkManager->importRecords(loadedBookmarks, frames);
+        else bookmarkManager->clear();
+    }
     return !foundErrors;
 }
 
-bool FrameFileIO::saveNativeCSVFile(QString filename, const QVector<CANFrame>* frames)
+bool FrameFileIO::saveNativeCSVFile(QString filename, const QVector<CANFrame>* frames, const BookmarkManager* bookmarkManager)
 {
     QFile *outFile = new QFile(filename);
     int lineCounter = 0;
@@ -2212,8 +2259,34 @@ bool FrameFileIO::saveNativeCSVFile(QString filename, const QVector<CANFrame>* f
         }
 
         outFile->write("\n");
-
     }
+
+    if (bookmarkManager && !bookmarkManager->isEmpty())
+    {
+        const QVector<BookmarkRecord> records = bookmarkManager->exportRecords();
+
+        outFile->write("#BOOKMARKS_START\n");
+
+        for (const BookmarkRecord &rec : records)
+        {
+            QByteArray safeLabel = rec.label.toUtf8().toPercentEncoding();
+
+            outFile->write("#BOOKMARK,");
+            outFile->write(QByteArray::number(static_cast<qulonglong>(rec.timestampUS)));
+            outFile->write(",");
+            outFile->write(QByteArray::number(rec.frameIndex));
+            outFile->write(",");
+            outFile->write(QByteArray::number(rec.bus));
+            outFile->write(",");
+            outFile->write(QByteArray::number(rec.frameId));
+            outFile->write(",");
+            outFile->write(safeLabel);
+            outFile->write("\n");
+        }
+
+        outFile->write("#BOOKMARKS_END\n");
+    }
+
     outFile->close();
     delete outFile;
     return true;
