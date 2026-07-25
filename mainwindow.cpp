@@ -1187,6 +1187,8 @@ void MainWindow::filterSetAll()
     }
     inhibitFilterUpdate = false;
     model->setAllFilters(true);
+    if (ui->frameFilterSearch)
+        ui->frameFilterSearch->clear();
 
     manageRowExpansion();
 }
@@ -1200,6 +1202,8 @@ void MainWindow::filterClearAll()
     }
     inhibitFilterUpdate = false;
     model->setAllFilters(false);
+    if (ui->frameFilterSearch)
+        ui->frameFilterSearch->clear();
     MainWindow::clearInspectDock();
 }
 
