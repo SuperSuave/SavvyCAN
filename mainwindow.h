@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <array>
 #include <algorithm>
+#include <limits>
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QPushButton>
@@ -264,10 +265,11 @@ private:
 
     quint64 makeAutoBookmarkKey(const CANFrame &frame) const;
     void processAutoBookmarks(const QVector<CANFrame> &frames);
-    bool findLatestFrameByBusAndId(int bus, uint32_t frameId, CANFrame &outFrame) const;
+    bool findLatestFrameByBusIdAndFormat(int bus, uint32_t frameId, bool extended, CANFrame &outFrame) const;
     void armAutoBookmarkWindow(int durationMs);
 
     bool autoBookmarkNewIdsActive = false;
+    QSet<quint64> autoBookmarkKnownIds;
     QSet<quint64> autoBookmarkSeenIds;
     QTimer *autoBookmarkTimer = nullptr;
     int autoBookmarkDurationMs = 2000;
@@ -377,8 +379,11 @@ private:
         bool disappearedAfter = false;
 
         double score = 0.0;
-    };
 
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
+    };
+    
     struct BookmarkAnalysisResult
     {
         CANFrame anchorFrame;
@@ -393,6 +398,8 @@ private:
 
     };
 
+
+
     struct CrossIdEventStats
     {
         FrameKey key;
@@ -406,6 +413,9 @@ private:
 
         int beforePayloadTransitions = 0;
         int afterPayloadTransitions = 0;
+
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
     };
 
     struct SameIdScoreFeatures
@@ -480,6 +490,7 @@ private:
     void showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result);
     void jumpToAnalysisFrameKey(const FrameKey &key);
     void graphAnalysisFrameKey(const FrameKey &key);
+    void graphAnalysisOriginalIndex(int originalIndex);
 
     QString describeSameIdReason(const FlipCandidate &c) const;
     QString describeCrossIdReason(const CrossIdCandidate &c) const;
