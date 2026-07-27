@@ -2,7 +2,7 @@
 
 APP_PATH="/usr/bin/SavvyLens"
 DESKTOP_PATH="/usr/share/applications/SavvyLens.desktop"
-ICON_PATH="/usr/share/pixmaps/SavvyLens.png"
+ICON_PATH="/usr/share/pixmaps/SavvyLensIcon.png"
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
