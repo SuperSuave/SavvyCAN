@@ -1,4 +1,14 @@
-# SavvyCAN
+# SavvyLens
+
+The core of SavvyLens is built on the incredible project SavvyCAN.
+
+The main goal for SavvyLens is to aim towards helping find mystery CANBus messages in vehicles. The work of this was brought on trying to help contribute towards a project that brought a hardware solution to pre-conditioning of pre-facelift e-gmp platform vehicles.
+
+Check out that awesome project at https://www.electroniqbuttons.com
+
+A lot of the differences in SavvyLens vs SavvyCAN were largely helped by AI.
+
+
 Qt based cross platform canbus tool
 (C) 2015-2024 Collin Kidder
 
@@ -43,8 +53,7 @@ Uses QCustomPlot available at:
 
 http://www.qcustomplot.com/
 
-However, this source code is integrated into the source for SavvyCAN and one isn't required
-to download it separately.
+However, this source code is integrated into the source for SavvyLens and one isn't required to download it separately.
 
 This project requires 5.14.0 or higher because of a dependency on QtSerialBus and other new additions to Qt.
 
@@ -59,19 +68,19 @@ It appears that the current binary build for MacOS requires at least MacOS 10.15
 ```sh
 cd ~
 
-git clone https://github.com/collin80/SavvyCAN.git
+git clone https://github.com/collin80/SavvyLens.git
 
-cd SavvyCAN
+cd SavvyLens
 
 ~/Qt/5.14/gcc_64/bin/qmake
 
 make
 ```
 
-Now run SavvyCAN
+Now run SavvyLens
 
 ```
-./SavvyCAN
+./SavvyLens
 ```
 
 On linux systems you can run `./install.sh` to create a desktop shortcut.

@@ -16,8 +16,8 @@ The main frame list takes up the majority of the main screen. This list consists
 - ID: The ID is specified either in hexadecimal or decimal (a preference you can set). This is the message identifier sent over the CAN bus.
 - RTR: 0 = Standard Message 1 = Remote transmit request. An RTR frame merely asks a node to send a message, it has no payload of its own.
 - Ext: 0 = Standard message (11 bit ID). 1 = Extended message (29 bit ID)
-- Dir: Either "Rx" or "Tx" to show whether SavvyCAN has received or sent this message.
-- Bus: SavvyCAN supports a variety of capture hardware. GVRET compatible devices can support more than one bus. The bus a frame came in on
+- Dir: Either "Rx" or "Tx" to show whether SavvyLens has received or sent this message.
+- Bus: SavvyLens supports a variety of capture hardware. GVRET compatible devices can support more than one bus. The bus a frame came in on
   is specified here. Many file formats do not specify bus and thus all frames will be loaded as bus 0.
 - Len: The number of data bytes that were sent with this frame. It can range from 0 to 8 for standard CAN and 0 to 64 for CAN-FD.
 - ASCII: A character based view of the CAN bytes in ASCII characters. Many systems that send serial numbers or VIN numbers will send them in ASCII and these will thus be visible here.
@@ -43,7 +43,7 @@ The Rest of the Main Window
 
 *Suspend Capturing / Resume Capturing is a button that will temporarily disable frame capture or re-enable it. This can be used to keep everything connected without capturing traffic for a short time. This can help to not capture traffic in between tests.
 
-*The "Normalize Frame Timing" button is used to reset the lowest timestamp to "0" and offset all other timestamps accordingly. This is useful to remove the starting offset when you start up a device long before actual traffic starts. SavvyCAN is designed such that this doesn't really matter most of the time but normalizing the timing might be useful to help correlate the timing between two different captures.
+*The "Normalize Frame Timing" button is used to reset the lowest timestamp to "0" and offset all other timestamps accordingly. This is useful to remove the starting offset when you start up a device long before actual traffic starts. SavvyLens is designed such that this doesn't really matter most of the time but normalizing the timing might be useful to help correlate the timing between two different captures.
 
 *The "Clear Frames" button will erase all captured messages. They will be irreversibly erased and all memory will be freed.
 
@@ -74,13 +74,13 @@ Loading And Saving Frames
 
 What CANBus analysis tool would be complete without an easy way to load and save frames? 
 
-SavvyCAN can load and save in several formats (a few of which are listed below):
+SavvyLens can load and save in several formats (a few of which are listed below):
 	- CRTD: This format was made by Mark Webb-Johnson for OVMS (open vehicle monitoring system) and other related tools. It is a reasonably readable and compact format.
-	- GVRET: This is the native format for GVRET and SavvyCAN. The GVRET format saves more information such as the bus a frame originated on. This format is in CSV 
+	- GVRET: This is the native format for GVRET and SavvyLens. The GVRET format saves more information such as the bus a frame originated on. This format is in CSV 
 	  (comma delimited) format and as such can easily be loaded into your favorite spreadsheet program as well.
 	- Generic ID/DATA - Another CSV format. This is a very cut down format with limited information.
-	- BusMaster - This is the format output by the BusMaster CANBus program. BusMaster is an open source Windows-only somewhat clone of CANAlyzer (the 800lb gorilla in the analysis space). The ability to load and save in this format makes SavvyCAN fully capable of swapping data with BusMaster should you need to do so.
-	- Microchip - Format output by Microchip CANBus tools. Perhaps you have logs that were captured with a $100 Microchip dongle? You can load them in SavvyCAN.
+	- BusMaster - This is the format output by the BusMaster CANBus program. BusMaster is an open source Windows-only somewhat clone of CANAlyzer (the 800lb gorilla in the analysis space). The ability to load and save in this format makes SavvyLens fully capable of swapping data with BusMaster should you need to do so.
+	- Microchip - Format output by Microchip CANBus tools. Perhaps you have logs that were captured with a $100 Microchip dongle? You can load them in SavvyLens.
 
 There are many other formats supported. Some are only supported for writing, some only for reading. The list of supported formats is expanded every so often.
 
@@ -88,8 +88,8 @@ There are many other formats supported. Some are only supported for writing, som
 Filters
 ========
 
-You might notice that there are three entries in the file menu that mention filters. SavvyCAN can filter messages so that you only see some of the messages coming in on the bus. It still saves all incoming messages but you are able to filter which you will view at any given time. 
-SavvyCAN allows for loading and saving the list of frames you'd like to view so that you can easily switch "sets" of frames to view. Also, when saving you can optionally save just the frames that you have filtered instead of every captured frame. Filters are set in the lower right-hand of the this screen. All IDs are selected by default. To deselect an ID click on the checkbox next to it. You can also deselect all IDs or select all IDs. These are useful if you only want to view a couple of IDs (click None then the few you need) or you just want to remove a couple (click All and then deselect the ones you don't care about).
+You might notice that there are three entries in the file menu that mention filters. SavvyLens can filter messages so that you only see some of the messages coming in on the bus. It still saves all incoming messages but you are able to filter which you will view at any given time. 
+SavvyLens allows for loading and saving the list of frames you'd like to view so that you can easily switch "sets" of frames to view. Also, when saving you can optionally save just the frames that you have filtered instead of every captured frame. Filters are set in the lower right-hand of the this screen. All IDs are selected by default. To deselect an ID click on the checkbox next to it. You can also deselect all IDs or select all IDs. These are useful if you only want to view a couple of IDs (click None then the few you need) or you just want to remove a couple (click All and then deselect the ones you don't care about).
 
 
 

@@ -1,8 +1,8 @@
 #!/bin/bash
 
-APP_PATH="/usr/bin/SavvyCAN"
-DESKTOP_PATH="/usr/share/applications/savvycan.desktop"
-ICON_PATH="/usr/share/pixmaps/SavvyCAN.png"
+APP_PATH="/usr/bin/SavvyLens"
+DESKTOP_PATH="/usr/share/applications/SavvyLens.desktop"
+ICON_PATH="/usr/share/pixmaps/SavvyLens.png"
 
 require_root() {
     if [ "$(id -u)" -ne 0 ]; then
@@ -16,17 +16,17 @@ show_help() {
     echo ""
     echo "Options:"
     echo "  --help        Show this help message"
-    echo "  --uninstall   Remove SavvyCAN from the system"
-    echo "  (no option)   Install or reinstall SavvyCAN"
+    echo "  --uninstall   Remove SavvyLens from the system"
+    echo "  (no option)   Install or reinstall SavvyLens"
 }
 
 install_error() {
-    echo "SavvyCAN installation failed."
+    echo "SavvyLens installation failed."
     exit 1
 }
 
 uninstall_error() {
-    echo "SavvyCAN uninstallation failed."
+    echo "SavvyLens uninstallation failed."
     exit 1
 }
 
@@ -39,41 +39,41 @@ require_root
 
 # Uninstall
 if [ "$1" = "--uninstall" ]; then
-    echo "Uninstalling SavvyCAN..."
+    echo "Uninstalling SavvyLens..."
     trap uninstall_error ERR
     rm -f "$APP_PATH" "$DESKTOP_PATH" "$ICON_PATH"
     trap - ERR
-    echo "SavvyCAN has been uninstalled."
+    echo "SavvyLens has been uninstalled."
     exit 0
 fi
 
 # Check required files
-if [ ! -f "SavvyCAN" ]; then
-    echo "Missing file \"SavvyCAN\". You need to build first."
+if [ ! -f "SavvyLens" ]; then
+    echo "Missing file \"SavvyLens\". You need to build first."
     install_error
 fi
 
-if [ ! -f "SavvyCAN.desktop" ]; then
-    echo "Missing file \"SavvyCAN.desktop\"."
+if [ ! -f "SavvyLens.desktop" ]; then
+    echo "Missing file \"SavvyLens.desktop\"."
     install_error
 fi
 
-if [ ! -f "icons/SavvyIcon.png" ]; then
-    echo "Missing file \"icons/SavvyIcon.png\"."
+if [ ! -f "icons/SavvyLensIcon.png" ]; then
+    echo "Missing file \"icons/SavvyLensIcon.png\"."
     install_error
 fi
 
 # Install
 if [ -f "$APP_PATH" ]; then
-    echo "Re-installing SavvyCAN..."
+    echo "Re-installing SavvyLens..."
 else
-    echo "Installing SavvyCAN..."
+    echo "Installing SavvyLens..."
 fi
 
 trap install_error ERR
-install -Dm755 SavvyCAN "$APP_PATH"
-install -Dm644 SavvyCAN.desktop "$DESKTOP_PATH"
-install -Dm644 icons/SavvyIcon.png "$ICON_PATH"
+install -Dm755 SavvyLens "$APP_PATH"
+install -Dm644 SavvyLens.desktop "$DESKTOP_PATH"
+install -Dm644 icons/SavvyLensIcon.png "$ICON_PATH"
 trap - ERR
 
-echo "SavvyCAN is installed."
+echo "SavvyLens is installed."

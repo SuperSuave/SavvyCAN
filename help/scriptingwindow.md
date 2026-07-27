@@ -23,7 +23,7 @@ The other way to see script status is to use the "Public Variables" interface. H
 Writing Scripts
 ================
 
-You are more or less free to write JavaScript scripts but, of course, you aren't in a web browser so browser specific functions are just not there. In their place are a couple of JS objects that allow the script to interface with the CAN buses connected to SavvyCAN. Also, certain functions can be created to automatically register callbacks.
+You are more or less free to write JavaScript scripts but, of course, you aren't in a web browser so browser specific functions are just not there. In their place are a couple of JS objects that allow the script to interface with the CAN buses connected to SavvyLens. Also, certain functions can be created to automatically register callbacks.
 
 Callback Functions
 ===================
@@ -69,7 +69,7 @@ isotp.setFilter(id, mask, bus) - Exactly like the raw CAN version in the can obj
 
 isotp.clearFilters() - Clear all ISO-TP filters and no longer receive ISO-TP traffic.
 
-isotp.sendISOTP(bus, id, length, data) - As in the can version. The difference here is that ISO-TP messages can be longer than 8 bytes and so might get turned into a multi-frame set of messages with flow control. This is handled for you by SavvyCAN so you needn't handle of the details of the exchange.
+isotp.sendISOTP(bus, id, length, data) - As in the can version. The difference here is that ISO-TP messages can be longer than 8 bytes and so might get turned into a multi-frame set of messages with flow control. This is handled for you by SavvyLens so you needn't handle of the details of the exchange.
 
 
 The uds Object

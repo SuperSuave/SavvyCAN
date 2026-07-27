@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <array>
 #include <algorithm>
+#include <limits>
 #include <QDialogButtonBox>
 #include <QHeaderView>
 #include <QPushButton>
@@ -264,10 +265,11 @@ private:
 
     quint64 makeAutoBookmarkKey(const CANFrame &frame) const;
     void processAutoBookmarks(const QVector<CANFrame> &frames);
-    bool findLatestFrameByBusAndId(int bus, uint32_t frameId, CANFrame &outFrame) const;
+    bool findLatestFrameByBusIdAndFormat(int bus, uint32_t frameId, bool extended, CANFrame &outFrame) const;
     void armAutoBookmarkWindow(int durationMs);
 
     bool autoBookmarkNewIdsActive = false;
+    QSet<quint64> autoBookmarkKnownIds;
     QSet<quint64> autoBookmarkSeenIds;
     QTimer *autoBookmarkTimer = nullptr;
     int autoBookmarkDurationMs = 2000;
@@ -337,6 +339,9 @@ private:
         int matchedFramesBefore = 0;
         int matchedFramesAfter = 0;
         std::array<EventByteStats, 64> bytes;
+
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
     };
 
     struct FlipCandidate
@@ -349,6 +354,9 @@ private:
         int beforeCount = 0;
         int afterCount = 0;
         int eventFlipCount = 0;
+
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
 
         double supportScore = 0.0;
         double localNoise = 0.0;
@@ -377,8 +385,11 @@ private:
         bool disappearedAfter = false;
 
         double score = 0.0;
-    };
 
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
+    };
+    
     struct BookmarkAnalysisResult
     {
         CANFrame anchorFrame;
@@ -406,6 +417,10 @@ private:
 
         int beforePayloadTransitions = 0;
         int afterPayloadTransitions = 0;
+
+        int anchorOriginalIndex = -1;
+        int nearestOriginalIndex = -1;
+        int nearestDistance = std::numeric_limits<int>::max();
     };
 
     struct SameIdScoreFeatures
@@ -435,7 +450,7 @@ private:
     QVector<CrossIdCandidate> analyzeCrossIdAroundBookmark(const QVector<CANFrame> &frames, int originalIndex, int windowBefore, int windowAfter) const;
 
     void accumulateCrossIdEventFrame(CrossIdEventStats &stats, const CANFrame &frame, bool isBeforeSide) const;
-    void accumulateEventFrame(EventFrameStats &stats, const CANFrame &frame, bool isBeforeSide) const;
+    void accumulateEventFrame(EventFrameStats &stats, const CANFrame &frame, bool isBeforeSide, int anchorOriginalIndex) const;
     QVector<FlipCandidate> rankFlipCandidates(const QHash<FrameKey, EventFrameStats> &eventStats, int sameIdRadius) const;
 
     // Optional future enhancement: live or offline-learned idle baseline.
@@ -479,7 +494,11 @@ private:
 
     void showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result);
     void jumpToAnalysisFrameKey(const FrameKey &key);
+    void jumpToAnalysisFrameIndex(int originalIndex);
     void graphAnalysisFrameKey(const FrameKey &key);
+    void graphAnalysisOriginalIndex(int originalIndex);
+
+
 
     QString describeSameIdReason(const FlipCandidate &c) const;
     QString describeCrossIdReason(const CrossIdCandidate &c) const;

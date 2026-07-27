@@ -1,6 +1,6 @@
 //
 //  canserver.h
-//  SavvyCAN
+//  SavvyLens
 //
 //  Created by Chris Whiteford on 2022-01-21.
 //

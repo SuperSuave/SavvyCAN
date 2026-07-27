@@ -44,7 +44,7 @@ void MQTT_BUS::piStarted()
 {
     QSettings settings;
     QString userName = settings.value("Remote/User", "Anonymous").toString();
-    QString host = settings.value("Remote/Host", "api.savvycan.com").toString();
+    QString host = settings.value("Remote/Host", "api.SavvyLens.com").toString();
     int port = settings.value("Remote/Port", 8883).toInt();
     QByteArray encPass = settings.value("Remote/Pass", "").toByteArray();
     QByteArray password;

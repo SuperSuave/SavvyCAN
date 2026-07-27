@@ -24,7 +24,7 @@ However, the ability to configure so many things and the ability to compile the 
 yourself both come as a double edged sword. They present many opportunities for things 
 to go wrong. Because of this there is a debugging console present on the connection window. 
 Click a bus in the table then click "Enable Console" to cause it to start logging serial 
-traffic. From this console you can see what is going on. It shows what SavvyCAN is sending 
+traffic. From this console you can see what is going on. It shows what SavvyLens is sending 
 and what it is getting back. It has extended status messages that might help to narrow down 
 what is going wrong. Additionally, if you're feeling adventurous you can send traffic to 
 the serial device from the Send line. "Send Hex" accepts a set of hex values separated 

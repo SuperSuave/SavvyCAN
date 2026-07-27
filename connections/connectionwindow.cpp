@@ -77,7 +77,7 @@ ConnectionWindow::ConnectionWindow(QWidget *parent) :
 
     rxBroadcastGVRET = new QUdpSocket(this);
     //Need to make sure it tries to share the address in case there are
-    //multiple instances of SavvyCAN running.
+    //multiple instances of SavvyLens running.
     rxBroadcastGVRET->bind(QHostAddress::AnyIPv4, 17222, QAbstractSocket::ShareAddress);
     connect(rxBroadcastGVRET, &QUdpSocket::readyRead, this, &ConnectionWindow::readPendingDatagrams);
 

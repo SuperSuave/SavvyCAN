@@ -18,6 +18,6 @@ Bus Number - You can also split the capture to include or exclude a given bus nu
 
 In all cases, you have the option of which side of the split you want to save. Click "Calculate Split" to process the split. You will see above the buttons a reference of how many frames there were in total and how many you would be saving after the split. From here you *should* be able to do one of two things:
 
-"Save split frames to a new file" - Save the new list of frames (after the split) to a file. You can save to any file format that SavvyCAN supports elsewhere. 
+"Save split frames to a new file" - Save the new list of frames (after the split) to a file. You can save to any file format that SavvyLens supports elsewhere. 
 
 "Replace main list with split frames" - Erases all messages on the main window and replaces them with the results of the bisection. You will lose all discarded frames if you haven't saved them elsewhere.

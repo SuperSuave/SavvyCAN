@@ -21,7 +21,7 @@ Quick Cheat Sheet
 Working with Nodes
 ===================
 
-In DBC files a node is a device on the CAN bus. For instance, the engine control unit (ECU) would be a node as would a motor controller, a battery charger, or any other device that is connected to the CAN bus. DBC files let you define nodes that are set as either the sender or receiver of a message. This allows messages to be organized for more easy retrieval. To add a new node click on the "New Node" button at the top or press F5 and type a new name and optionally a comment. The comment is not used by SavvyCAN but can be filled out for your own reference. The arrow next to a node can be pressed to get a list of all messages contained within.
+In DBC files a node is a device on the CAN bus. For instance, the engine control unit (ECU) would be a node as would a motor controller, a battery charger, or any other device that is connected to the CAN bus. DBC files let you define nodes that are set as either the sender or receiver of a message. This allows messages to be organized for more easy retrieval. To add a new node click on the "New Node" button at the top or press F5 and type a new name and optionally a comment. The comment is not used by SavvyLens but can be filled out for your own reference. The arrow next to a node can be pressed to get a list of all messages contained within.
 
 Working with Messages
 =====================

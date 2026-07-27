@@ -19,7 +19,7 @@ Defining and Editing Signals
 
 At the top you can rename the signal and you'll see that it is renamed in the DBC window as well.
 
-The majority of the view is taken up by the bitfield grid. This view shows all the signals contained within this message (that have the same multiplexor value as this one). They're all labeled as well. Bonus fun fact - SavvyCAN technically does support CAN-FD DBC files! That's right, you can load DBC files with CAN-FD signals and they will work. The bitfield will adjust to show enough bits to show the whole message.
+The majority of the view is taken up by the bitfield grid. This view shows all the signals contained within this message (that have the same multiplexor value as this one). They're all labeled as well. Bonus fun fact - SavvyLens technically does support CAN-FD DBC files! That's right, you can load DBC files with CAN-FD signals and they will work. The bitfield will adjust to show enough bits to show the whole message.
 
 "Bit Length" - This sets how many bits the signal uses. Once you do this you'll see that that many bits are now highlighted in the data grid. The black bit with diagonal stripes is the "start" bit, green bits (with stripes the other way) are the other bits in the signal. Bits used by other signals are colored according to a secret list of colors. They also have the signal name. You should not overlap onto other signals. This could be possible with multiplexed signals but you will NOT see signals on this grid that are not part of the same multiplexor value as this signal so you should NOT overlap here.
 

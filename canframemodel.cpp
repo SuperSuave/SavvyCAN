@@ -652,7 +652,7 @@ QVariant CANFrameModel::headerData(int section, Qt::Orientation orientation,
         case Column::Data:
             return QString(tr("Data"));
         case Column::Idx: ///< The frames original number --AI Helped Here
-            return QString(tr("Original Frame ID"));
+            return QString(tr("Frame Number"));
         default:
             return QString("");
         }

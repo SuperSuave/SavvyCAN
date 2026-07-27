@@ -6,11 +6,11 @@ PROJECT_ROOT="$(pwd)"
 # Category: Linguist
 # Name: Release Translations (lrelease)
 # Executable: lrelease
-# Arguments: SavvyCAN.pro
+# Arguments: SavvyLens.pro
 # Working Directory: %{ActiveProject:Path}
 
 echo "Generating .qm files..."
 
-lrelease -verbose "$PROJECT_ROOT"/SavvyCAN.pro
+lrelease -verbose "$PROJECT_ROOT"/SavvyLens.pro
 
 echo ".qm files generated."

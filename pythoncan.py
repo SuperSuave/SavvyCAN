@@ -32,7 +32,7 @@ parser.add_argument('-b', action='store', dest='bustype', default='socketcan', h
 parser.add_argument('-i', action='store', dest='channel', default='can0', help='Specify which socketcan interface to use')
 parser.add_argument('-s', action='store', dest='speed', default=500000, type=int, help='Set speed of socketcan interface')
 parser.add_argument('-t', action='store', dest='topic', default="can", help='Set MQTT topic to use')
-parser.add_argument('-H', action='store', dest='mqtthost', default="api.savvycan.com", help='Set hostname of MQTT Broker')
+parser.add_argument('-H', action='store', dest='mqtthost', default="api.SavvyLens.com", help='Set hostname of MQTT Broker')
 parser.add_argument('-P', action='store', dest='mqttport', default=8883, type=int, help='Set port to connect to on MQTT Broker')
 
 arg_results = parser.parse_args()

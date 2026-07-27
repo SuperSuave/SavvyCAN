@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=SavvyCAN
-Name[pt_BR]=SavvyCAN
+Name=SavvyLens
+Name[pt_BR]=SavvyLens
 GenericName=CANBus reverse engineering tool
 GenericName[pt_BR]=Ferramenta Rede CAN de engenharia reversa
 Comment=Facilitates reverse engineering of canbus captures
 Comment[pt_BR]=Facilitar engenharia reversa de capturas de Rede CAN
-Exec=SavvyCAN
-Icon=SavvyCAN
+Exec=SavvyLens
+Icon=SavvyLens
 Terminal=false
 Categories=Development;Electronics;IDE;
 MimeType=text/x-application;

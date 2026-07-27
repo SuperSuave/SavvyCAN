@@ -18,14 +18,14 @@ static QStringList availableLanguageCodes()
 {
     QStringList codes;
     QDir transDir(QCoreApplication::applicationDirPath() + "/translations");
-    QStringList list = transDir.entryList(QStringList() << "SavvyCAN_*.qm");
+    QStringList list = transDir.entryList(QStringList() << "SavvyLens_*.qm");
     //* just for test purposes
     if (list.isEmpty()) {
         // maybe only ts files exist during development
-        list = transDir.entryList(QStringList() << "SavvyCAN_*.ts");
+        list = transDir.entryList(QStringList() << "SavvyLens_*.ts");
     }
     for (QString file : list) {
-        QRegExp re("SavvyCAN_(.*)\\.(qm|ts)");
+        QRegExp re("SavvyLens_(.*)\\.(qm|ts)");
         if (re.indexIn(file) != -1) {
             codes << re.cap(1);
         }
@@ -80,7 +80,7 @@ MainSettingsDialog::MainSettingsDialog(QWidget *parent) :
     ui->cbValidate->setChecked(settings.value("Main/ValidateComm", true).toBool());
     ui->spinPlaybackSpeed->setValue(settings.value("Playback/DefSpeed", 5).toInt());
     ui->lineClockFormat->setText(settings.value("Main/TimeFormat", "MMM-dd HH:mm:ss.zzz").toString());
-    ui->lineRemoteHost->setText(settings.value("Remote/Host", "api.savvycan.com").toString());
+    ui->lineRemoteHost->setText(settings.value("Remote/Host", "api.SavvyLens.com").toString());
     ui->lineRemotePort->setText(settings.value("Remote/Port", "8883").toString()); //default port for SSL enabled MQTT
     ui->lineRemoteUser->setText(settings.value("Remote/User", "Anonymous").toString());
     QByteArray encPass = settings.value("Remote/Pass", "").toByteArray();

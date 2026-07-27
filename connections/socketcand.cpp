@@ -129,7 +129,7 @@ bool SocketCANd::piSendFrame(const CANFrame& frame)
     int ID;
 
 //    //calculate bus number offset (in case of multiple connections)
-//    //useless since SavvyCAN already delivers the right index in frame.bus
+//    //useless since SavvyLens already delivers the right index in frame.bus
 //    QList<CANConnection*> connList = CANConManager::getInstance()->getConnections();
 //    int currentConnPos = connList.indexOf(this);
 //    int busOffset = 0;

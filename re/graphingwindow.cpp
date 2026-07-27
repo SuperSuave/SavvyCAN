@@ -327,7 +327,7 @@ void GraphingWindow::titleDoubleClick(QMouseEvent* event, QCPTextElement* title)
 
     /*
   bool ok;
-  QString newTitle = QInputDialog::getText(this, "SavvyCAN Graphing", "New plot title:", QLineEdit::Normal, title->text(), &ok);
+  QString newTitle = QInputDialog::getText(this, "SavvyLens Graphing", "New plot title:", QLineEdit::Normal, title->text(), &ok);
   if (ok)
   {
     title->setText(newTitle);
@@ -343,7 +343,7 @@ void GraphingWindow::axisDoubleClick(QCPAxis *axis, QCPAxis::SelectablePart part
   if (part == QCPAxis::spAxisLabel) // Set an axis label by double clicking on it
   {
     bool ok;
-    QString newLabel = QInputDialog::getText(this, "SavvyCAN Graphing", "New axis label:", QLineEdit::Normal, axis->label(), &ok);
+    QString newLabel = QInputDialog::getText(this, "SavvyLens Graphing", "New axis label:", QLineEdit::Normal, axis->label(), &ok);
     if (ok)
     {
       axis->setLabel(newLabel);

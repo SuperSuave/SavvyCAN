@@ -6,11 +6,11 @@ PROJECT_ROOT="$(pwd)"
 # Category: Linguist
 # Name: Update Translations (lupdate)
 # Executable: lupdate
-# Arguments: -project SavvyCAN.pro
+# Arguments: -project SavvyLens.pro
 # Working Directory: %{ActiveProject:Path}
 
 echo "Updating translation files..."
 
-lupdate -verbose "$PROJECT_ROOT"/SavvyCAN.pro
+lupdate -verbose "$PROJECT_ROOT"/SavvyLens.pro
 
 echo "Translation files updated."

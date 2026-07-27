@@ -3,10 +3,10 @@
 CURDIR=`pwd`
 
 # Set absolute path
-sed -e "s,<DIR>,$CURDIR,g" SavvyCAN.desktop > SavvyCAN.desktop.temp
+sed -e "s,<DIR>,$CURDIR,g" SavvyLens.desktop > SavvyLens.desktop.temp
 
-cp SavvyCAN.desktop.temp ~/.local/share/applications/SavvyCAN.desktop
-cp SavvyCAN.desktop.temp ~/Desktop/SavvyCAN.desktop
-rm SavvyCAN.desktop.temp
+cp SavvyLens.desktop.temp ~/.local/share/applications/SavvyLens.desktop
+cp SavvyLens.desktop.temp ~/Desktop/SavvyLens.desktop
+rm SavvyLens.desktop.temp
 
-echo "Installed SavvyCAN icons on menu and desktop !"
+echo "Installed SavvyLens icons on menu and desktop !"
