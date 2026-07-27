@@ -1286,7 +1286,7 @@ bool FrameFileIO::saveCRTDFile(QString filename, const QVector<CANFrame>* frames
     }
 
     //write in float format with 6 digits after the decimal point
-    outFile->write(QString::number(frames->at(0).timeStamp().microSeconds() / 1000000.0, 'f', 6).toUtf8() + tr(" CXX GVRET-PC Reverse Engineering Tool Output V").toUtf8() + QString::number(VERSION).toUtf8());
+    outFile->write(QString::number(frames->at(0).timeStamp().microSeconds() / 1000000.0, 'f', 6).toUtf8() + tr(" CXX GVRET-PC Reverse Engineering Tool Output V").toUtf8() + QByteArray(VERSION));
     outFile->write("\n");
 
     for (int c = 0; c < frames->count(); c++)
@@ -2916,7 +2916,7 @@ bool FrameFileIO::saveIXXATFile(QString filename, const QVector<CANFrame>* frame
         return false;
     }
 
-    outFile->write("ASCII Trace IXXAT SavvyCAN V" + QString::number(VERSION).toUtf8() + "\n");
+    outFile->write("ASCII Trace IXXAT SavvyLens" + QByteArray(VERSION) + "\n");
     outFile->write("Date: " + timestamp.toString("d:M:yyyy").toUtf8() + "\n");
     outFile->write("Start time: " + timestamp.toString("h:m:s").toUtf8() + "\n");
     timestamp = timestamp.addMSecs((frames->last().timeStamp().microSeconds() - frames->first().timeStamp().microSeconds()) / 1000);
@@ -3299,7 +3299,7 @@ bool FrameFileIO::saveMicrochipFile(QString filename, const QVector<CANFrame>* f
     outFile->write("//---------------------------------\n");
     outFile->write("Microchip Technology Inc.\n");
     outFile->write("CAN BUS Analyzer\n");
-    outFile->write("SavvyCAN Exporter\n");
+    outFile->write("SavvyLens Exporter\n");
     outFile->write("Logging Started: ");
     outFile->write(timestamp.toString("d/M/yyyy h:m:s").toUtf8());
     outFile->write("\n");
@@ -3512,7 +3512,7 @@ bool FrameFileIO::saveTraceFile(QString filename, const QVector<CANFrame> * fram
         return false;
     }
 
-    outFile->write(";  SavvyCAN CAN Logger trace file\n");
+    outFile->write(";  SavvyLens CAN Logger trace file\n");
     outFile->write(";  Device Serial Number : 0000 \n");
     outFile->write(";  Start Time : ");
     outFile->write(timestamp.toString("ddd, MMM dd, yyyy :: h:m:s\n").toUtf8());
@@ -4982,7 +4982,7 @@ bool FrameFileIO::loadCANServerFile(QString filename, QVector<CANFrame>* frames)
                 QByteArray markData = inFile->read(markSize[0]);
                 
                 /*
-                 Log Marks aren't yet supported by SavvyCAN
+                 Log Marks aren't yet supported by SavvyLens
                  
                 //Add this log mark to the list of frames so that it shows up
                 CANFrame markFrame;
