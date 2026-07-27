@@ -2701,6 +2701,25 @@ QVector<MainWindow::CrossIdCandidate> MainWindow::analyzeCrossIdAroundBookmark(
             continue;
         }
 
+        const bool appearedOnlyAfter = (features.exclusiveAfter > 0.5);
+        const bool disappearedAfter = (features.exclusiveBefore > 0.5);
+        const bool countChanged = (stats.beforeCount != stats.afterCount);
+        const bool hasAppearanceShift = (features.appearanceShift > 0.01);
+        const bool hasPayloadChange = (payloadChangeCount > 0);
+        const bool hasMeaningfulScore = (scoreCrossIdCandidate(features) > 0.15);
+
+        // Minimal filter only: remove obvious no-op IDs that look the same
+        // on both sides of the bookmark window and contribute essentially nothing.
+        if (!appearedOnlyAfter &&
+            !disappearedAfter &&
+            !countChanged &&
+            !hasAppearanceShift &&
+            !hasPayloadChange &&
+            !hasMeaningfulScore)
+        {
+            continue;
+        }
+
         CrossIdCandidate c;
         c.key = key;
         c.beforeCount = stats.beforeCount;
@@ -2942,40 +2961,42 @@ QVector<MainWindow::FlipCandidate> MainWindow::rankFlipCandidates(
 
     for (auto it = eventStats.constBegin(); it != eventStats.constEnd(); ++it)
     {
-        const FrameKey key = it.key();
+        const FrameKey &key = it.key();
         const EventFrameStats &stats = it.value();
 
-        auto idleIt = idleBaseline.constFind(key);
         const FrameIdleStats *idleStats = nullptr;
+        auto idleIt = idleBaseline.constFind(key);
         if (idleIt != idleBaseline.constEnd())
             idleStats = &idleIt.value();
 
-        for (int byteIdx = 0; byteIdx < 64; byteIdx++)
+        for (int byteIdx = 0; byteIdx < 64; ++byteIdx)
         {
             const EventByteStats &eb = stats.bytes[byteIdx];
-            if (!eb.hasBeforeValue || !eb.hasAfterValue) continue;
-            if (eb.beforeValue == eb.afterValue) continue;
+            if (!eb.hasBeforeValue || !eb.hasAfterValue)
+                continue;
 
-            double rawIdleNoise = 0.0;
+            if (eb.beforeValue == eb.afterValue)
+                continue;
+
             const ByteIdleStats *idleByteStats = nullptr;
-            if (idleStats && idleStats->bytes[byteIdx].samples > 1)
-            {
+            if (idleStats && byteIdx < idleStats->maxDlcSeen)
                 idleByteStats = &idleStats->bytes[byteIdx];
-                rawIdleNoise = double(idleByteStats->changes) /
-                               double(qMax(1, idleByteStats->samples - 1));
-            }
 
-            const double windowConfidence = clamp01(
-                safeRatio(
-                    static_cast<double>(qMin(stats.matchedFramesBefore, stats.matchedFramesAfter)),
-                    static_cast<double>(qMax(1, sameIdRadius))
-                )
-            );
+            const SameIdScoreFeatures features =
+                    buildSameIdScoreFeatures(eb, idleByteStats, sameIdRadius);
 
-            SameIdScoreFeatures features = buildSameIdScoreFeatures(eb, idleByteStats, sameIdRadius);
-            features.windowConfidence = windowConfidence;
+            if (features.eventDelta <= 0.0)
+                continue;
 
             const double score = scoreSameIdCandidate(features);
+
+            double rawIdleNoise = 0.0;
+            if (idleByteStats && idleByteStats->samples > 1)
+            {
+                rawIdleNoise = clamp01(
+                    safeRatio(static_cast<double>(idleByteStats->changes),
+                              static_cast<double>(qMax(1, idleByteStats->samples - 1))));
+            }
 
             FlipCandidate c;
             c.key = key;
@@ -3848,6 +3869,28 @@ void MainWindow::graphAnalysisOriginalIndex(int originalIndex)
 
     if (!selectFrameByOriginalIndex(originalIndex))
         statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
+}
+
+void MainWindow::graphAnalysisOriginalIndex(int originalIndex)
+{
+    if (!model)
+        return;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || frames->isEmpty())
+        return;
+
+    if (originalIndex < 0 || originalIndex >= frames->size())
+    {
+        statusBar()->showMessage(tr("Could not find a nearby frame to graph for this candidate"), 2500);
+        return;
+    }
+
+    const CANFrame &frame = frames->at(originalIndex);
+
+    showGraphingWindow();
+    emit sendCenterTimeID(frame.frameId(), frame.timeStamp().microSeconds() / 1000000.0);
+    selectFrameByOriginalIndex(frame.originalIndex);
 }
 
 void MainWindow::graphAnalysisFrameKey(const FrameKey &key)
