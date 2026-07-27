@@ -2691,23 +2691,6 @@ QVector<MainWindow::CrossIdCandidate> MainWindow::analyzeCrossIdAroundBookmark(
         const bool hasPayloadChange = (payloadChangeCount > 0);
         const bool hasMeaningfulScore = (scoreCrossIdCandidate(features) > 0.15);
 
-        if (!appearedOnlyAfter &&
-            !disappearedAfter &&
-            !countChanged &&
-            !hasAppearanceShift &&
-            !hasPayloadChange &&
-            !hasMeaningfulScore)
-        {
-            continue;
-        }
-
-        const bool appearedOnlyAfter = (features.exclusiveAfter > 0.5);
-        const bool disappearedAfter = (features.exclusiveBefore > 0.5);
-        const bool countChanged = (stats.beforeCount != stats.afterCount);
-        const bool hasAppearanceShift = (features.appearanceShift > 0.01);
-        const bool hasPayloadChange = (payloadChangeCount > 0);
-        const bool hasMeaningfulScore = (scoreCrossIdCandidate(features) > 0.15);
-
         // Minimal filter only: remove obvious no-op IDs that look the same
         // on both sides of the bookmark window and contribute essentially nothing.
         if (!appearedOnlyAfter &&
@@ -3871,27 +3854,6 @@ void MainWindow::graphAnalysisOriginalIndex(int originalIndex)
         statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
 }
 
-void MainWindow::graphAnalysisOriginalIndex(int originalIndex)
-{
-    if (!model)
-        return;
-
-    const QVector<CANFrame> *frames = model->getListReference();
-    if (!frames || frames->isEmpty())
-        return;
-
-    if (originalIndex < 0 || originalIndex >= frames->size())
-    {
-        statusBar()->showMessage(tr("Could not find a nearby frame to graph for this candidate"), 2500);
-        return;
-    }
-
-    const CANFrame &frame = frames->at(originalIndex);
-
-    showGraphingWindow();
-    emit sendCenterTimeID(frame.frameId(), frame.timeStamp().microSeconds() / 1000000.0);
-    selectFrameByOriginalIndex(frame.originalIndex);
-}
 
 void MainWindow::graphAnalysisFrameKey(const FrameKey &key)
 {
