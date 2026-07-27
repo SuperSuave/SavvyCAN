@@ -11,12 +11,12 @@
 #include <QColor>
 #include <QFont>
 
-class SavvyCANApplication : public QApplication
+class SavvyLensApplication : public QApplication
 {
 public:
     MainWindow *mainWindow;
 
-    SavvyCANApplication(int &argc, char **argv) : QApplication(argc, argv)
+    SavvyLensApplication(int &argc, char **argv) : QApplication(argc, argv)
     {
         mainWindow = nullptr;
     }
@@ -224,14 +224,14 @@ int main(int argc, char *argv[])
     //qSetMessagePattern("Type: %{type}\nProduct Name: %{appname}\nFile: %{file}\nLine: %{line}\nMethod: %{function}\nThreadID: %{threadid}\nThreadPtr: %{qthreadptr}\nMessage: %{message}");
 #endif
 
-    SavvyCANApplication a(argc, argv);
+    SavvyLensApplication a(argc, argv);
 
     //Add a local path for Qt extensions, to allow for per-application extensions.
     a.addLibraryPath("plugins");
 
     //These things are used by QSettings to set up setting storage
     a.setOrganizationName("EVTV");
-    a.setApplicationName("SavvyCAN");
+    a.setApplicationName("SavvyLens");
     a.setOrganizationDomain("evtv.me");
 
     QSettings::setDefaultFormat(QSettings::IniFormat);
@@ -250,8 +250,8 @@ int main(int argc, char *argv[])
     QString shortLang = locale.name().left(2);
 
     if (QString translationDir = QCoreApplication::applicationDirPath() + "/translations";
-        !translator.load("SavvyCAN_" + lang, translationDir)) {
-        translator.load("SavvyCAN_" + shortLang, translationDir);
+        !translator.load("SavvyLens_" + lang, translationDir)) {
+        translator.load("SavvyLens_" + shortLang, translationDir);
     }
     a.installTranslator(&translator);
 
