@@ -121,6 +121,10 @@ MainWindow::MainWindow(QWidget *parent) :
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
 
+    mcpStatusLabel = new QLabel("AI: Disconnected");
+    mcpStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    ui->statusBar->addPermanentWidget(mcpStatusLabel);
+
     readSettings();
 
     QHeaderView *verticalHeader = ui->canFramesView->verticalHeader();
@@ -1954,6 +1958,30 @@ void MainWindow::showFrameDataAnalysis()
             frameInfoWindow = new FrameInfoWindow(model->getFilteredListReference());
     }
     frameInfoWindow->show();
+}
+
+void MainWindow::analyzeFrameData(QString frameId)
+{
+    showFrameDataAnalysis();
+    if (frameInfoWindow) {
+        frameInfoWindow->selectID(frameId);
+    }
+}
+
+FrameInfoWindow* MainWindow::getFrameInfoWindow()
+{
+    return frameInfoWindow;
+}
+
+void MainWindow::updateMCPStatus(int count)
+{
+    if (count > 0) {
+        mcpStatusLabel->setText(QString("AI: %1 Connected").arg(count));
+        mcpStatusLabel->setStyleSheet("QLabel { color : #409cff; font-weight: bold; }");
+    } else {
+        mcpStatusLabel->setText("AI: Disconnected");
+        mcpStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    }
 }
 
 void MainWindow::showISOInterpreterWindow()

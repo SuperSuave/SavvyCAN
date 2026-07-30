@@ -109,7 +109,9 @@ SOURCES += main.cpp\
     re/temporalgraphwindow.cpp \
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
-    pcaplite.cpp
+    pcaplite.cpp \
+    mcp/mcpserver.cpp
+
 
 HEADERS  += mainwindow.h \
     bookmarkmanager.h \
@@ -208,7 +210,9 @@ HEADERS  += mainwindow.h \
     re/temporalgraphwindow.h \
     re/udsfirmwareuploaderwindow.h \
     filterutility.h \
-    pcaplite.h
+    pcaplite.h \
+    mcp/mcpserver.h
+
 
 FORMS    += ui/candatagrid.ui \
     triggerdialog.ui \

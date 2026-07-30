@@ -161,8 +161,10 @@ private slots:
     void triggerTimedDiscoveryBookmark();
     void analyzeCurrentBookmarkOrSelection();
 
-
 public slots:
+    void analyzeFrameData(QString frameId);
+    void updateMCPStatus(int count);
+    FrameInfoWindow* getFrameInfoWindow();
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();
@@ -190,6 +192,7 @@ private:
     QByteArray inputBuffer;
     QTimer updateTimer;
     QElapsedTimer *elapsedTime;
+    QLabel *mcpStatusLabel;
     FrameSenderObject *frameSender;
     int framesPerSec;
     int rxFrames;

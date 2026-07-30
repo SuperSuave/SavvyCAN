@@ -10,6 +10,9 @@
 #include <QPalette>
 #include <QColor>
 #include <QFont>
+#include "mcp/mcpserver.h"
+#include "mcp/mcpserver.h"
+
 
 class SavvyLensApplication : public QApplication
 {
@@ -265,6 +268,13 @@ int main(int argc, char *argv[])
     ThemeManager::applyDarkTheme(a);
 
     a.mainWindow = new MainWindow();
+    
+    if (settings.value("MCP/Enable", true).toBool()) {
+        MCPServer *mcpServer = new MCPServer(&a);
+        QObject::connect(mcpServer, &MCPServer::clientCountChanged, a.mainWindow, &MainWindow::updateMCPStatus);
+        mcpServer->start(settings.value("MCP/Port", "8888").toInt());
+    }
+    
     a.mainWindow->show();
 
     int retCode = a.exec();

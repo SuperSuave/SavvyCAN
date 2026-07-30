@@ -251,6 +251,19 @@ void FrameInfoWindow::showEvent(QShowEvent* event)
     }
 }
 
+void FrameInfoWindow::selectID(QString idStr)
+{
+    // Make sure we have the latest list
+    refreshIDList();
+    for (int i = 0; i < ui->listFrameID->count(); ++i) {
+        if (FilterUtility::getId(ui->listFrameID->item(i)).compare(idStr, Qt::CaseInsensitive) == 0) {
+            ui->listFrameID->setCurrentRow(i);
+            updateDetailsWindow(FilterUtility::getId(ui->listFrameID->item(i)));
+            break;
+        }
+    }
+}
+
 bool FrameInfoWindow::eventFilter(QObject *obj, QEvent *event)
 {
     if (event->type() == QEvent::KeyRelease)
@@ -919,6 +932,29 @@ void FrameInfoWindow::dumpNode(QTreeWidgetItem* item, QFile *file, int indent)
         dumpNode( item->child(i), file, indent + 1 );
 }
 
+QJsonObject FrameInfoWindow::nodeToJson(QTreeWidgetItem* item)
+{
+    QJsonObject obj;
+    obj["text"] = item->text(0);
+    if (item->childCount() > 0) {
+        QJsonArray children;
+        for( int i = 0; i < item->childCount(); ++i ) {
+            children.append(nodeToJson(item->child(i)));
+        }
+        obj["children"] = children;
+    }
+    return obj;
+}
+
+QJsonArray FrameInfoWindow::getStatisticsAsJson()
+{
+    QJsonArray result;
+    QTreeWidgetItem *root = ui->treeDetails->invisibleRootItem();
+    for (int i = 0; i < root->childCount(); ++i) {
+        result.append(nodeToJson(root->child(i)));
+    }
+    return result;
+}
 
 void FrameInfoWindow::applyPlotTheme(QCustomPlot *plot)
 {

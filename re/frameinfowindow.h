@@ -24,6 +24,8 @@ public:
     explicit FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FrameInfoWindow();
     void showEvent(QShowEvent*);
+    void selectID(QString idStr);
+    QJsonArray getStatisticsAsJson();
 
 private slots:
     void updateDetailsWindow(QString);
@@ -58,6 +60,7 @@ private:
     void readSettings();
     void writeSettings();
     void dumpNode(QTreeWidgetItem* item, QFile *file, int indent);
+    QJsonObject nodeToJson(QTreeWidgetItem* item);
 };
 
 #endif // FRAMEINFOWINDOW_H
