@@ -120,8 +120,53 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         
         analyzeTool["inputSchema"] = analyzeInputSchema;
         
+        QJsonObject queryTool;
+        queryTool["name"] = "query_can_logs";
+        queryTool["description"] = "Query raw CAN frames from logs/live capture. Set maxResults=0 to just get counts.";
+        
+        QJsonObject queryInputSchema;
+        queryInputSchema["type"] = "object";
+        QJsonObject queryProperties;
+        
+        QJsonObject frameIdProp2;
+        frameIdProp2["type"] = "string";
+        frameIdProp2["description"] = "Optional CAN frame ID to filter by (e.g. '01A2').";
+        queryProperties["frameId"] = frameIdProp2;
+        
+        QJsonObject busProp;
+        busProp["type"] = "integer";
+        queryProperties["bus"] = busProp;
+        
+        QJsonObject minTsProp;
+        minTsProp["type"] = "integer";
+        minTsProp["description"] = "Optional minimum timestamp (microseconds).";
+        queryProperties["minTimestamp"] = minTsProp;
+        
+        QJsonObject maxTsProp;
+        maxTsProp["type"] = "integer";
+        queryProperties["maxTimestamp"] = maxTsProp;
+        
+        QJsonObject sortProp;
+        sortProp["type"] = "string";
+        sortProp["description"] = "'recent' (default) or 'earliest'";
+        sortProp["enum"] = QJsonArray() << "recent" << "earliest";
+        queryProperties["sort"] = sortProp;
+        
+        QJsonObject offsetProp;
+        offsetProp["type"] = "integer";
+        queryProperties["offset"] = offsetProp;
+        
+        QJsonObject maxResultsProp;
+        maxResultsProp["type"] = "integer";
+        maxResultsProp["description"] = "Max frames to return (default 500). Set to 0 to only get counts.";
+        queryProperties["maxResults"] = maxResultsProp;
+        
+        queryInputSchema["properties"] = queryProperties;
+        queryTool["inputSchema"] = queryInputSchema;
+        
         tools.append(pingTool);
         tools.append(analyzeTool);
+        tools.append(queryTool);
         result["tools"] = tools;
         response["result"] = result;
     }
@@ -170,6 +215,83 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
                 statsItem["text"] = "And here are the computation statistics computed by the application:\n" + QString::fromUtf8(QJsonDocument(fiw->getStatisticsAsJson()).toJson(QJsonDocument::Indented));
                 content.append(statsItem);
             }
+            
+        } else if (toolName == "query_can_logs") {
+            QJsonObject args = params["arguments"].toObject();
+            
+            bool filterId = args.contains("frameId");
+            uint32_t targetId = 0;
+            if (filterId) {
+                targetId = Utility::ParseStringToNum(args["frameId"].toString());
+            }
+            
+            bool filterBus = args.contains("bus");
+            int targetBus = args["bus"].toInt();
+            
+            bool filterMinTs = args.contains("minTimestamp");
+            qint64 minTs = filterMinTs ? args["minTimestamp"].toDouble() : 0;
+            
+            bool filterMaxTs = args.contains("maxTimestamp");
+            qint64 maxTs = filterMaxTs ? args["maxTimestamp"].toDouble() : 0;
+            
+            QString sort = args.contains("sort") ? args["sort"].toString() : "recent";
+            int offset = args.contains("offset") ? args["offset"].toInt() : 0;
+            
+            int maxResults = args.contains("maxResults") ? args["maxResults"].toInt() : 500;
+            if (maxResults > 5000) maxResults = 5000;
+            
+            const QVector<CANFrame> *frames = MainWindow::getReference()->getCANFrameModel()->getListReference();
+            
+            QVector<int> matchedIndices;
+            for (int i = 0; i < frames->size(); ++i) {
+                const CANFrame &f = frames->at(i);
+                if (filterId && f.frameId() != targetId) continue;
+                if (filterBus && f.bus != targetBus) continue;
+                
+                qint64 ts = (qint64)(f.timeStamp().seconds() * 1000000 + f.timeStamp().microSeconds());
+                if (filterMinTs && ts < minTs) continue;
+                if (filterMaxTs && ts > maxTs) continue;
+                
+                matchedIndices.append(i);
+            }
+            
+            int totalMatching = matchedIndices.size();
+            QJsonArray matchedFrames;
+            
+            if (maxResults > 0) {
+                if (sort == "recent") {
+                    for (int i = matchedIndices.size() - 1 - offset; i >= 0 && matchedFrames.size() < maxResults; --i) {
+                        const CANFrame &f = frames->at(matchedIndices[i]);
+                        QJsonObject frameObj;
+                        frameObj["timestamp"] = (qint64)(f.timeStamp().seconds() * 1000000 + f.timeStamp().microSeconds());
+                        frameObj["bus"] = f.bus;
+                        frameObj["id"] = QString::number(f.frameId(), 16).toUpper();
+                        frameObj["data_hex"] = QString(f.payload().toHex());
+                        matchedFrames.append(frameObj);
+                    }
+                } else {
+                    for (int i = offset; i < matchedIndices.size() && matchedFrames.size() < maxResults; ++i) {
+                        const CANFrame &f = frames->at(matchedIndices[i]);
+                        QJsonObject frameObj;
+                        frameObj["timestamp"] = (qint64)(f.timeStamp().seconds() * 1000000 + f.timeStamp().microSeconds());
+                        frameObj["bus"] = f.bus;
+                        frameObj["id"] = QString::number(f.frameId(), 16).toUpper();
+                        frameObj["data_hex"] = QString(f.payload().toHex());
+                        matchedFrames.append(frameObj);
+                    }
+                }
+            }
+            
+            QJsonObject resultData;
+            resultData["totalFramesInLog"] = frames->size();
+            resultData["totalMatchingFilters"] = totalMatching;
+            resultData["returnedCount"] = matchedFrames.size();
+            resultData["data"] = matchedFrames;
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
             
         } else {
             result["isError"] = true;
