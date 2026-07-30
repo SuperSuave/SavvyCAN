@@ -1993,6 +1993,31 @@ FuzzingWindow* MainWindow::getFuzzingWindow() const
     return fuzzingWindow;
 }
 
+UDSScanWindow* MainWindow::getUDSScanWindow() const
+{
+    return udsScanWindow;
+}
+
+ISOTP_InterpreterWindow* MainWindow::getISOTPWindow() const
+{
+    return isoWindow;
+}
+
+FrameSenderWindow* MainWindow::getFrameSenderWindow() const
+{
+    return frameSenderWindow;
+}
+
+SignalViewerWindow* MainWindow::getSignalViewerWindow() const
+{
+    return signalViewerWindow;
+}
+
+GraphingWindow* MainWindow::getGraphingWindow() const
+{
+    return lastGraphingWindow;
+}
+
 void MainWindow::updateMCPStatus(int count)
 {
     if (count > 0) {

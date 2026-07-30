@@ -1600,6 +1600,45 @@ void GraphingWindow::moveLegend()
     }
 }
 
+void GraphingWindow::mcpOpenForSignal(int messageId, QString signalName)
+{
+    if (!isVisible()) show();
+    
+    if (dbcHandler == nullptr) return;
+    
+    DBC_MESSAGE *msg = dbcHandler->findMessage(messageId);
+    if (!msg) return;
+    
+    DBC_SIGNAL *sig = msg->sigHandler->findSignalByName(signalName);
+    if (!sig) return;
+    
+    // Check if it's already graphed to avoid duplicates
+    for (int i = 0; i < graphParams.count(); i++) {
+        if (graphParams.at(i).associatedSignal == sig) {
+            return;
+        }
+    }
+    
+    GraphParams gp;
+    gp.ID = messageId;
+    gp.mask = 0xFFFFFFFF;
+    gp.bias = (float)sig->bias;
+    gp.lineColor = QColor(Qt::blue);
+    gp.graphName = sig->name;
+    gp.intelFormat = sig->intelByteOrder;
+    if (sig->valType == SIGNED_INT) gp.isSigned = true;
+        else gp.isSigned = false;
+    gp.numBits = sig->signalSize;
+    gp.scale = (float)sig->factor;
+    gp.startBit = sig->startBit;
+    gp.stride = 1;
+    gp.bus = -1;
+    gp.associatedSignal = sig;
+    
+    createGraph(gp, true);
+    ui->graphingView->replot();
+}
+
 GraphParams::GraphParams()
 {
     ID = 0;

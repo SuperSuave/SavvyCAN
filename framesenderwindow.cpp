@@ -277,6 +277,36 @@ void FrameSenderWindow::processIncomingFrame(CANFrame *frame)
     }
 }
 
+void FrameSenderWindow::mcpOpenAndAddSequence(int bus, int id, QByteArray data, int intervalMs)
+{
+    if (!isVisible()) show();
+    
+    // The last row is always a blank row. We can edit it, and onCellChanged will automatically create a new blank row.
+    int row = ui->tableSender->rowCount() - 1;
+    
+    inhibitChanged = true;
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_BUS)->setText(QString::number(bus));
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_ID)->setText(QString::number(id, 16).toUpper());
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_LEN)->setText(QString::number(data.length()));
+    
+    QString dataStr;
+    for (int i = 0; i < data.length(); i++) {
+        dataStr.append(Utility::formatNumber((unsigned char)data[i]) + " ");
+    }
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_DATA)->setText(dataStr.trimmed());
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_TRIGGER)->setText(QString::number(intervalMs) + "ms");
+    ui->tableSender->item(row, ST_COLS::SENDTAB_COL_EN)->setCheckState(Qt::Checked);
+    inhibitChanged = false;
+    
+    // Process the cell changes to parse triggers and update data structure
+    for (int c = 1; c < ST_COLS::SENDTAB_COL_COUNT; c++) {
+        processCellChange(row, c);
+    }
+    
+    // Force the creation of a new blank row now that we've used this one
+    createBlankRow();
+}
+
 void FrameSenderWindow::enableAll()
 {
     for (int i = 0; i < ui->tableSender->rowCount() - 1; i++)

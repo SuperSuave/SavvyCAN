@@ -59,6 +59,7 @@ public:
 
 public slots:
     void createGraph(GraphParams &params, bool createGraphParam = true);
+    void mcpOpenForSignal(int messageId, QString signalName);
 
 private slots:
     void titleDoubleClick(QMouseEvent *event, QCPTextElement *title);

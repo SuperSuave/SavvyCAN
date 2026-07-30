@@ -20,6 +20,8 @@ public:
     ~ISOTP_InterpreterWindow();
     void showEvent(QShowEvent*);
 
+    void mcpOpenAndConfigure(int rxId);
+
 private slots:
     void newISOMessage(ISOTP_MESSAGE msg);
     void newUDSMessage(UDS_MESSAGE msg);

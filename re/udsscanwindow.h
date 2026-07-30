@@ -59,6 +59,10 @@ public:
     explicit UDSScanWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~UDSScanWindow();
 
+    void mcpOpenAndConfigure(int startId, int endId, int bus, int scanType);
+    void mcpStartScan();
+    void mcpStopScan();
+
 private slots:
     void updatedFrames(int numFrames);
     void gotUDSReply(UDS_MESSAGE msg);

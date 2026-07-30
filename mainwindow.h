@@ -169,6 +169,11 @@ public slots:
     BisectWindow* getBisectWindow() const;
     FlowViewWindow* getFlowViewWindow() const;
     FuzzingWindow* getFuzzingWindow() const;
+    UDSScanWindow* getUDSScanWindow() const;
+    ISOTP_InterpreterWindow* getISOTPWindow() const;
+    FrameSenderWindow* getFrameSenderWindow() const;
+    SignalViewerWindow* getSignalViewerWindow() const;
+    GraphingWindow* getGraphingWindow() const;
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();

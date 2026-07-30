@@ -800,6 +800,32 @@ void UDSScanWindow::updatedFrames(int numFrames)
     }
 }
 
+void UDSScanWindow::mcpOpenAndConfigure(int startId, int endId, int bus, int scanType)
+{
+    if (!isVisible()) show();
+    ui->spinStartID->setValue(startId);
+    ui->spinEndID->setValue(endId);
+    int busIdx = ui->cbBuses->findText(QString::number(bus));
+    if (busIdx >= 0) ui->cbBuses->setCurrentIndex(busIdx);
+    if (scanType >= 0 && scanType < ui->cbScanType->count()) {
+        ui->cbScanType->setCurrentIndex(scanType);
+    }
+}
+
+void UDSScanWindow::mcpStartScan()
+{
+    if (!currentlyRunning) {
+        scanSelected();
+    }
+}
+
+void UDSScanWindow::mcpStopScan()
+{
+    if (currentlyRunning) {
+        stopScan();
+    }
+}
+
 void UDSScanWindow::gotUDSReply(UDS_MESSAGE msg)
 {
     QString result;
