@@ -165,6 +165,9 @@ public slots:
     void analyzeFrameData(QString frameId);
     void updateMCPStatus(int count);
     FrameInfoWindow* getFrameInfoWindow();
+    SnifferWindow* getSnifferWindow() const;
+    BisectWindow* getBisectWindow() const;
+    FlowViewWindow* getFlowViewWindow() const;
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();

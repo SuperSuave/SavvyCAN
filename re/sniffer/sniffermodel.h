@@ -40,6 +40,7 @@ public:
     void refresh();
     void clear();
     void filter(fltType pType, int pId=0);
+    QJsonObject getStatsAsJson() const;
     bool getNeverExpire();
     bool getFadeInactive();
     bool getMuteNotched();

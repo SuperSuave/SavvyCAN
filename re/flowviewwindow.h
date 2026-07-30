@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QLocale>
 #include <QSlider>
+#include <QJsonObject>
 #include "qcustomplot.h"
 #include "can_structs.h"
 
@@ -19,6 +20,7 @@ public:
     explicit FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FlowViewWindow();
     void showEvent(QShowEvent*);
+    QJsonObject getFlowViewStats() const;
 
 private slots:
     void btnBackOneClick();

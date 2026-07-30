@@ -2,6 +2,7 @@
 #define BISECTWINDOW_H
 
 #include <QDialog>
+#include <QJsonObject>
 #include "can_structs.h"
 
 namespace Ui {
@@ -16,6 +17,7 @@ public:
     explicit BisectWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~BisectWindow();
     void showEvent(QShowEvent*);
+    QJsonObject getBisectStatus() const;
 
 signals:
     void sendCANFrame(const CANFrame *, int);

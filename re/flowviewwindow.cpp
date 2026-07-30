@@ -5,6 +5,8 @@
 #include "filterutility.h"
 #include "qcpaxistickerhex.h"
 #include "themes/thememanager.h"
+#include <QJsonObject>
+#include <QJsonArray>
 
 QColor FlowViewWindow::graphColorForIndex(int idx)
 {
@@ -175,6 +177,27 @@ FlowViewWindow::FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent)
     ui->listFrameID->horizontalScrollBar()->setEnabled(false);
 
     playbackTimer->setInterval(ui->spinPlayback->value()); //set the timer to the default value of the control
+}
+
+QJsonObject FlowViewWindow::getFlowViewStats() const
+{
+    QJsonObject obj;
+    uint32_t selectedId = 0;
+    if (frameCache.count() > 0) selectedId = frameCache[0].frameId();
+    obj["selected_id"] = QString::number(selectedId, 16).toUpper();
+    obj["frame_count"] = frameCache.count();
+    
+    QJsonArray triggers;
+    for (int i=0; i<8; i++) {
+        if (triggerValues[i] != -1) {
+             QJsonObject t;
+             t["byte"] = i;
+             t["value"] = triggerValues[i];
+             triggers.append(t);
+        }
+    }
+    obj["triggers"] = triggers;
+    return obj;
 }
 
 void FlowViewWindow::showEvent(QShowEvent* event)

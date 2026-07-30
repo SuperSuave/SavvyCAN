@@ -164,9 +164,30 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         queryInputSchema["properties"] = queryProperties;
         queryTool["inputSchema"] = queryInputSchema;
         
+        QJsonObject analysisTool;
+        analysisTool["name"] = "query_analysis_tools";
+        analysisTool["description"] = "Fetch data from the core analysis tools (Sniffer, FlowView, Bisect).";
+        
+        QJsonObject analysisInputSchema;
+        analysisInputSchema["type"] = "object";
+        QJsonObject analysisProperties;
+        
+        QJsonObject toolProp;
+        toolProp["type"] = "string";
+        toolProp["description"] = "'sniffer', 'flowview', or 'bisect'";
+        toolProp["enum"] = QJsonArray() << "sniffer" << "flowview" << "bisect";
+        analysisProperties["tool"] = toolProp;
+        
+        analysisInputSchema["properties"] = analysisProperties;
+        QJsonArray analysisRequired;
+        analysisRequired.append("tool");
+        analysisInputSchema["required"] = analysisRequired;
+        analysisTool["inputSchema"] = analysisInputSchema;
+        
         tools.append(pingTool);
         tools.append(analyzeTool);
         tools.append(queryTool);
+        tools.append(analysisTool);
         result["tools"] = tools;
         response["result"] = result;
     }
@@ -287,6 +308,37 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             resultData["totalMatchingFilters"] = totalMatching;
             resultData["returnedCount"] = matchedFrames.size();
             resultData["data"] = matchedFrames;
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "query_analysis_tools") {
+            QString target = params["arguments"].toObject()["tool"].toString();
+            QJsonObject resultData;
+            
+            if (target == "sniffer") {
+                if (MainWindow::getReference()->getSnifferWindow()) {
+                     resultData = MainWindow::getReference()->getSnifferWindow()->getSnifferData();
+                } else {
+                     resultData["error"] = "Sniffer window not open or unavailable";
+                }
+            } else if (target == "flowview") {
+                if (MainWindow::getReference()->getFlowViewWindow()) {
+                     resultData = MainWindow::getReference()->getFlowViewWindow()->getFlowViewStats();
+                } else {
+                     resultData["error"] = "Flow View window not open or unavailable";
+                }
+            } else if (target == "bisect") {
+                if (MainWindow::getReference()->getBisectWindow()) {
+                     resultData = MainWindow::getReference()->getBisectWindow()->getBisectStatus();
+                } else {
+                     resultData["error"] = "Bisect window not open or unavailable";
+                }
+            } else {
+                resultData["error"] = "Unknown analysis tool requested";
+            }
             
             QJsonObject item;
             item["type"] = "text";

@@ -1973,6 +1973,21 @@ FrameInfoWindow* MainWindow::getFrameInfoWindow()
     return frameInfoWindow;
 }
 
+SnifferWindow* MainWindow::getSnifferWindow() const
+{
+    return snifferWindow;
+}
+
+BisectWindow* MainWindow::getBisectWindow() const
+{
+    return bisectWindow;
+}
+
+FlowViewWindow* MainWindow::getFlowViewWindow() const
+{
+    return flowViewWindow;
+}
+
 void MainWindow::updateMCPStatus(int count)
 {
     if (count > 0) {
