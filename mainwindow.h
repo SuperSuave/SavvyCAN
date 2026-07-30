@@ -168,6 +168,7 @@ public slots:
     SnifferWindow* getSnifferWindow() const;
     BisectWindow* getBisectWindow() const;
     FlowViewWindow* getFlowViewWindow() const;
+    FuzzingWindow* getFuzzingWindow() const;
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();

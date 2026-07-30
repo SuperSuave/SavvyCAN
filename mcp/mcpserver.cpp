@@ -1,9 +1,11 @@
 #include "mcpserver.h"
 #include <QDebug>
 #include <QJsonParseError>
+#include <QJsonArray>
 #include "../mainwindow.h"
 #include "../re/frameinfowindow.h"
 #include "../utility.h"
+#include "../connections/canconmanager.h"
 
 MCPServer::MCPServer(QObject *parent) : QObject(parent), tcpServer(new QTcpServer(this))
 {
@@ -184,10 +186,51 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         analysisInputSchema["required"] = analysisRequired;
         analysisTool["inputSchema"] = analysisInputSchema;
         
+        QJsonObject injectTool;
+        injectTool["name"] = "inject_can_frame";
+        injectTool["description"] = "Inject specific bytes to a specific CAN ID.";
+        QJsonObject injectInputSchema;
+        injectInputSchema["type"] = "object";
+        QJsonObject injectProperties;
+        injectProperties["bus"] = QJsonObject({{"type", "integer"}, {"description", "The bus number"}});
+        injectProperties["id"] = QJsonObject({{"type", "integer"}, {"description", "The CAN ID (e.g., 0x123 as integer)"}});
+        injectProperties["data"] = QJsonObject({{"type", "string"}, {"description", "The hex string of bytes to send (e.g., '12AB34')"}});
+        injectInputSchema["properties"] = injectProperties;
+        injectInputSchema["required"] = QJsonArray() << "bus" << "id" << "data";
+        injectTool["inputSchema"] = injectInputSchema;
+
+        QJsonObject configFuzzerTool;
+        configFuzzerTool["name"] = "configure_fuzzer";
+        configFuzzerTool["description"] = "Configure fuzzer with ID ranges and mutation rates.";
+        QJsonObject configFuzzerSchema;
+        configFuzzerSchema["type"] = "object";
+        QJsonObject configFuzzerProps;
+        configFuzzerProps["startId"] = QJsonObject({{"type", "integer"}});
+        configFuzzerProps["endId"] = QJsonObject({{"type", "integer"}});
+        configFuzzerProps["intervalMs"] = QJsonObject({{"type", "integer"}});
+        configFuzzerProps["fuzzType"] = QJsonObject({{"type", "integer"}, {"description", "0=Sequential, 1=Sweeping, 2=Random"}});
+        configFuzzerSchema["properties"] = configFuzzerProps;
+        configFuzzerSchema["required"] = QJsonArray() << "startId" << "endId" << "intervalMs" << "fuzzType";
+        configFuzzerTool["inputSchema"] = configFuzzerSchema;
+
+        QJsonObject startFuzzerTool;
+        startFuzzerTool["name"] = "start_fuzzer";
+        startFuzzerTool["description"] = "Start the configured fuzzer.";
+        startFuzzerTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+
+        QJsonObject stopFuzzerTool;
+        stopFuzzerTool["name"] = "stop_fuzzer";
+        stopFuzzerTool["description"] = "Stop the running fuzzer.";
+        stopFuzzerTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
         tools.append(pingTool);
         tools.append(analyzeTool);
         tools.append(queryTool);
         tools.append(analysisTool);
+        tools.append(injectTool);
+        tools.append(configFuzzerTool);
+        tools.append(startFuzzerTool);
+        tools.append(stopFuzzerTool);
         result["tools"] = tools;
         response["result"] = result;
     }
@@ -338,6 +381,74 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
                 }
             } else {
                 resultData["error"] = "Unknown analysis tool requested";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "inject_can_frame") {
+            int bus = params["arguments"].toObject()["bus"].toInt();
+            int id = params["arguments"].toObject()["id"].toInt();
+            QString dataStr = params["arguments"].toObject()["data"].toString();
+            QByteArray data = QByteArray::fromHex(dataStr.toUtf8());
+            
+            CANFrame frame;
+            frame.bus = bus;
+            frame.setFrameId(id);
+            frame.setPayload(data);
+            frame.setExtendedFrameFormat(id > 0x7FF);
+            
+            bool success = CANConManager::getInstance()->sendFrame(frame);
+            
+            QJsonObject resultData;
+            resultData["success"] = success;
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "configure_fuzzer") {
+            int startId = params["arguments"].toObject()["startId"].toInt();
+            int endId = params["arguments"].toObject()["endId"].toInt();
+            int intervalMs = params["arguments"].toObject()["intervalMs"].toInt();
+            int fuzzType = params["arguments"].toObject()["fuzzType"].toInt();
+            
+            QJsonObject resultData;
+            if (MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->getFuzzingWindow()->mcpConfigure(startId, endId, intervalMs, fuzzType);
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Fuzzing window not open";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "start_fuzzer") {
+            QJsonObject resultData;
+            if (MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->getFuzzingWindow()->mcpStart();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Fuzzing window not open";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "stop_fuzzer") {
+            QJsonObject resultData;
+            if (MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->getFuzzingWindow()->mcpStop();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Fuzzing window not open";
             }
             
             QJsonObject item;

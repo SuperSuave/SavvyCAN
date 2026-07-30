@@ -1988,6 +1988,11 @@ FlowViewWindow* MainWindow::getFlowViewWindow() const
     return flowViewWindow;
 }
 
+FuzzingWindow* MainWindow::getFuzzingWindow() const
+{
+    return fuzzingWindow;
+}
+
 void MainWindow::updateMCPStatus(int count)
 {
     if (count > 0) {

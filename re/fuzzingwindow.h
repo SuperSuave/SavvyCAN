@@ -27,6 +27,11 @@ class FuzzingWindow : public QDialog
 public:
     explicit FuzzingWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FuzzingWindow();
+    
+    void mcpConfigure(int startId, int endId, int intervalMs, int fuzzType);
+    void mcpStart();
+    void mcpStop();
+    bool mcpIsActive() const;
 
 signals:
     void sendCANFrame(const CANFrame *);
