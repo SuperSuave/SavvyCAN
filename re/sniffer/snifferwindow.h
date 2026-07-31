@@ -3,7 +3,7 @@
 
 #include <QDialog>
 #include <QListWidgetItem>
-#include <QJsonObject>
+
 #include "sniffermodel.h"
 #include "SnifferDelegate.h"
 
@@ -46,7 +46,7 @@ public slots:
     void fltAll();
     void fltNone();
     void itemChanged(QListWidgetItem*);
-    QJsonObject getSnifferData() const;
+    const SnifferModel* getModel() const { return &mModel; }
 
 private:
     void filter(bool pFilter);

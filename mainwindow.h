@@ -163,7 +163,7 @@ public slots:
 
 public slots:
     void analyzeFrameData(QString frameId);
-    void updateMCPStatus(int count);
+    void updateCopilotStatus(int count);
     FrameInfoWindow* getFrameInfoWindow();
     SnifferWindow* getSnifferWindow() const;
     BisectWindow* getBisectWindow() const;
@@ -203,7 +203,7 @@ private:
     QByteArray inputBuffer;
     QTimer updateTimer;
     QElapsedTimer *elapsedTime;
-    QLabel *mcpStatusLabel;
+    QLabel *copilotStatusLabel;
     FrameSenderObject *frameSender;
     int framesPerSec;
     int rxFrames;

@@ -39,8 +39,8 @@ public slots:
     void getDebugText(QString debugText);
     void setSuspendAll(bool pSuspend);
     
-    bool mcpConnectBus(int type, QString portName, QString driverName, int serialSpeed, int busSpeed, bool isCanFd, int dataRate);
-    bool mcpDisconnectBus(int index);
+    bool connectBus(int type, QString portName, QString driverName, int serialSpeed, int busSpeed, bool isCanFd, int dataRate);
+    bool disconnectBus(int index);
 
 
 private slots:

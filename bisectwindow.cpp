@@ -42,12 +42,14 @@ BisectWindow::~BisectWindow()
     delete ui;
 }
 
-QJsonObject BisectWindow::getBisectStatus() const
+int BisectWindow::getMainFrameCount() const
 {
-    QJsonObject obj;
-    obj["main_frame_count"] = modelFrames->count();
-    obj["split_frame_count"] = splitFrames.count();
-    return obj;
+    return modelFrames ? modelFrames->count() : 0;
+}
+
+int BisectWindow::getSplitFrameCount() const
+{
+    return splitFrames.count();
 }
 
 void BisectWindow::showEvent(QShowEvent* event)

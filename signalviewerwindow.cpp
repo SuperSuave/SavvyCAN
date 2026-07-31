@@ -400,7 +400,7 @@ void SignalViewerWindow::loadDefinitions(bool append)
     }
 }
 
-void SignalViewerWindow::mcpOpenForSignal(int messageId, QString signalName)
+void SignalViewerWindow::openForSignal(int messageId, QString signalName)
 {
     if (!isVisible()) show();
     

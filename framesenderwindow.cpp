@@ -277,7 +277,7 @@ void FrameSenderWindow::processIncomingFrame(CANFrame *frame)
     }
 }
 
-void FrameSenderWindow::mcpOpenAndAddSequence(int bus, int id, QByteArray data, int intervalMs)
+void FrameSenderWindow::addSequence(int bus, int id, QByteArray data, int intervalMs)
 {
     if (!isVisible()) show();
     
@@ -504,17 +504,17 @@ void FrameSenderWindow::loadSenderFile(QString filename)
     delete inFile;
 }
 
-void FrameSenderWindow::mcpStartAll()
+void FrameSenderWindow::startAll()
 {
     enableAll();
 }
 
-void FrameSenderWindow::mcpStopAll()
+void FrameSenderWindow::stopAll()
 {
     disableAll();
 }
 
-void FrameSenderWindow::mcpClearAll()
+void FrameSenderWindow::clearAll()
 {
     clearGrid();
 }

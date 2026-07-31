@@ -965,45 +965,12 @@ void FrameInfoWindow::dumpNode(QTreeWidgetItem* item, QFile *file, int indent)
         dumpNode( item->child(i), file, indent + 1 );
 }
 
-QJsonObject FrameInfoWindow::nodeToJson(QTreeWidgetItem* item, bool excludeHistograms)
+QTreeWidget* FrameInfoWindow::getDetailsTree() const
 {
-    QJsonObject obj;
-    obj["text"] = item->text(0);
-    if (item->childCount() > 0) {
-        QJsonArray children;
-        for( int i = 0; i < item->childCount(); ++i ) {
-            QTreeWidgetItem* child = item->child(i);
-            if (excludeHistograms) {
-                QString text = child->text(0);
-                if (text == tr("Histogram") || text == tr("Bitfield Histogram") || text == tr("Bitchange Heatmap")) {
-                    continue;
-                }
-            }
-            children.append(nodeToJson(child, excludeHistograms));
-        }
-        if (!children.isEmpty()) {
-            obj["children"] = children;
-        }
-    }
-    return obj;
+    return ui->treeDetails;
 }
 
-QJsonArray FrameInfoWindow::getStatisticsAsJson(bool excludeHistograms)
-{
-    QJsonArray result;
-    QTreeWidgetItem *root = ui->treeDetails->invisibleRootItem();
-    for (int i = 0; i < root->childCount(); ++i) {
-        QTreeWidgetItem* child = root->child(i);
-        if (excludeHistograms) {
-            QString text = child->text(0);
-            if (text == tr("Histogram") || text == tr("Bitfield Histogram") || text == tr("Bitchange Heatmap")) {
-                continue;
-            }
-        }
-        result.append(nodeToJson(child, excludeHistograms));
-    }
-    return result;
-}
+
 
 void FrameInfoWindow::applyPlotTheme(QCustomPlot *plot)
 {

@@ -179,25 +179,21 @@ FlowViewWindow::FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent)
     playbackTimer->setInterval(ui->spinPlayback->value()); //set the timer to the default value of the control
 }
 
-QJsonObject FlowViewWindow::getFlowViewStats() const
+uint32_t FlowViewWindow::getSelectedId() const
 {
-    QJsonObject obj;
-    uint32_t selectedId = 0;
-    if (frameCache.count() > 0) selectedId = frameCache[0].frameId();
-    obj["selected_id"] = QString::number(selectedId, 16).toUpper();
-    obj["frame_count"] = frameCache.count();
-    
-    QJsonArray triggers;
-    for (int i=0; i<8; i++) {
-        if (triggerValues[i] != -1) {
-             QJsonObject t;
-             t["byte"] = i;
-             t["value"] = triggerValues[i];
-             triggers.append(t);
-        }
-    }
-    obj["triggers"] = triggers;
-    return obj;
+    if (frameCache.count() > 0) return frameCache[0].frameId();
+    return 0;
+}
+
+int FlowViewWindow::getFrameCount() const
+{
+    return frameCache.count();
+}
+
+int FlowViewWindow::getTriggerValue(int index) const
+{
+    if (index >= 0 && index < 8) return triggerValues[index];
+    return -1;
 }
 
 void FlowViewWindow::showEvent(QShowEvent* event)

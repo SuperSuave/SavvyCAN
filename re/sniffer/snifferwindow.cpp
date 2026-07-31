@@ -199,10 +199,7 @@ void SnifferWindow::fltNone()
     filter(true);
 }
 
-QJsonObject SnifferWindow::getSnifferData() const
-{
-    return mModel.getStatsAsJson();
-}
+
 
 void SnifferWindow::filter(bool pFilter)
 {

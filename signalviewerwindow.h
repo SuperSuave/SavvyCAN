@@ -16,7 +16,7 @@ public:
     explicit SignalViewerWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~SignalViewerWindow();
 
-    void mcpOpenForSignal(int messageId, QString signalName);
+    void openForSignal(int messageId, QString signalName);
 
 private slots:
     void loadNodes();

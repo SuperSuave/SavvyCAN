@@ -110,7 +110,9 @@ SOURCES += main.cpp\
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
     pcaplite.cpp \
-    mcp/mcpserver.cpp
+    mcp/mcpserver.cpp \
+    mcp/mcptools_list.cpp \
+    mcp/mcptools_call.cpp
 
 
 HEADERS  += mainwindow.h \

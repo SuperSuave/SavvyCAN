@@ -276,7 +276,7 @@ void ConnectionWindow::handleNewConn()
     delete thisDialog;
 }
 
-bool ConnectionWindow::mcpConnectBus(int type, QString portName, QString driverName, int serialSpeed, int busSpeed, bool isCanFd, int dataRate)
+bool ConnectionWindow::connectBus(int type, QString portName, QString driverName, int serialSpeed, int busSpeed, bool isCanFd, int dataRate)
 {
     CANConnection *conn = create((CANCon::type)type, portName, driverName, serialSpeed, busSpeed, isCanFd, dataRate);
     if (conn) {
@@ -287,7 +287,7 @@ bool ConnectionWindow::mcpConnectBus(int type, QString portName, QString driverN
     return false;
 }
 
-bool ConnectionWindow::mcpDisconnectBus(int index)
+bool ConnectionWindow::disconnectBus(int index)
 {
     if (index < 0 || index >= connModel->rowCount()) return false;
     ui->tableConnections->selectRow(index);

@@ -800,7 +800,7 @@ void UDSScanWindow::updatedFrames(int numFrames)
     }
 }
 
-void UDSScanWindow::mcpOpenAndConfigure(int startId, int endId, int bus, int scanType)
+void UDSScanWindow::openAndConfigure(int startId, int endId, int bus, int scanType)
 {
     if (!isVisible()) show();
     ui->spinStartID->setValue(startId);
@@ -812,14 +812,14 @@ void UDSScanWindow::mcpOpenAndConfigure(int startId, int endId, int bus, int sca
     }
 }
 
-void UDSScanWindow::mcpStartScan()
+void UDSScanWindow::startFuzzingScan()
 {
     if (!currentlyRunning) {
         scanSelected();
     }
 }
 
-void UDSScanWindow::mcpStopScan()
+void UDSScanWindow::stopFuzzingScan()
 {
     if (currentlyRunning) {
         stopScan();

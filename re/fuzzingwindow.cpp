@@ -435,7 +435,7 @@ void FuzzingWindow::refreshIDList()
     ui->listID->sortItems();
 }
 
-void FuzzingWindow::mcpConfigure(int startId, int endId, int intervalMs, int fuzzType)
+void FuzzingWindow::configureFuzzer(int startId, int endId, int intervalMs, int fuzzType)
 {
     ui->txtStartID->setText(QString::number(startId, 16));
     ui->txtEndID->setText(QString::number(endId, 16));
@@ -448,17 +448,17 @@ void FuzzingWindow::mcpConfigure(int startId, int endId, int intervalMs, int fuz
     else if (fuzzType == 2) ui->rbRandomBits->setChecked(true);
 }
 
-void FuzzingWindow::mcpStart()
+void FuzzingWindow::startFuzzing()
 {
     if (!currentlyFuzzing) toggleFuzzing();
 }
 
-void FuzzingWindow::mcpStop()
+void FuzzingWindow::stopFuzzing()
 {
     if (currentlyFuzzing) toggleFuzzing();
 }
 
-bool FuzzingWindow::mcpIsActive() const
+bool FuzzingWindow::isFuzzingActive() const
 {
     return currentlyFuzzing;
 }

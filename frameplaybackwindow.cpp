@@ -641,17 +641,17 @@ void FramePlaybackWindow::btnPlayClick()
     updateFrameLabel();
 }
 
-void FramePlaybackWindow::mcpPlaybackPlay()
+void FramePlaybackWindow::playPlayback()
 {
     btnPlayClick();
 }
 
-void FramePlaybackWindow::mcpPlaybackPause()
+void FramePlaybackWindow::pausePlayback()
 {
     btnPauseClick();
 }
 
-void FramePlaybackWindow::mcpPlaybackStop()
+void FramePlaybackWindow::stopPlayback()
 {
     btnStopClick();
 }

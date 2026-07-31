@@ -3,8 +3,7 @@
 
 #include <QDialog>
 #include "bus_protocols/isotp_handler.h"
-#include <QJsonArray>
-#include <QJsonObject>
+
 
 class ISOTP_MESSAGE;
 class ISOTP_HANDLER;
@@ -22,9 +21,9 @@ public:
     ~ISOTP_InterpreterWindow();
     void showEvent(QShowEvent*);
 
-    void mcpOpenAndConfigure(int rxId);
-    QJsonArray mcpGetMessages(int limit = 50);
-    void mcpSendISOTPFrame(int bus, int id, QByteArray data);
+    void openAndConfigure(int rxId);
+    const QVector<ISOTP_MESSAGE>& getMessagesList() const { return messages; }
+    void sendISOTPFrame(int bus, int id, QByteArray data);
 
 private slots:
     void newISOMessage(ISOTP_MESSAGE msg);

@@ -28,10 +28,10 @@ public:
     explicit FuzzingWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FuzzingWindow();
     
-    void mcpConfigure(int startId, int endId, int intervalMs, int fuzzType);
-    void mcpStart();
-    void mcpStop();
-    bool mcpIsActive() const;
+    void configureFuzzer(int startId, int endId, int intervalMs, int fuzzType);
+    void startFuzzing();
+    void stopFuzzing();
+    bool isFuzzingActive() const;
 
 signals:
     void sendCANFrame(const CANFrame *);

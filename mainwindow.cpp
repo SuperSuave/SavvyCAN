@@ -121,9 +121,9 @@ MainWindow::MainWindow(QWidget *parent) :
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
 
-    mcpStatusLabel = new QLabel("AI: Disconnected");
-    mcpStatusLabel->setStyleSheet("QLabel { color : gray; }");
-    ui->statusBar->addPermanentWidget(mcpStatusLabel);
+    copilotStatusLabel = new QLabel("AI: Disconnected");
+    copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    ui->statusBar->addPermanentWidget(copilotStatusLabel);
 
     readSettings();
 
@@ -2028,14 +2028,14 @@ GraphingWindow* MainWindow::getGraphingWindow() const
     return lastGraphingWindow;
 }
 
-void MainWindow::updateMCPStatus(int count)
+void MainWindow::updateCopilotStatus(int count)
 {
     if (count > 0) {
-        mcpStatusLabel->setText(QString("AI: %1 Connected").arg(count));
-        mcpStatusLabel->setStyleSheet("QLabel { color : #409cff; font-weight: bold; }");
+        copilotStatusLabel->setText(QString("AI: %1 Connected").arg(count));
+        copilotStatusLabel->setStyleSheet("QLabel { color : #409cff; font-weight: bold; }");
     } else {
-        mcpStatusLabel->setText("AI: Disconnected");
-        mcpStatusLabel->setStyleSheet("QLabel { color : gray; }");
+        copilotStatusLabel->setText("AI: Disconnected");
+        copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
     }
 }
 

@@ -318,30 +318,7 @@ void SnifferModel::filter(fltType pType, int pId)
 /**********         slots       ****************/
 /***********************************************/
 
-QJsonObject SnifferModel::getStatsAsJson() const
-{
-    QJsonObject result;
-    QJsonArray items;
-    for (auto it = mMap.constBegin(); it != mMap.constEnd(); ++it) {
-        SnifferItem *sniff = it.value();
-        QJsonObject obj;
-        obj["id"] = QString::number(sniff->getId(), 16).toUpper();
-        obj["delta"] = sniff->getDelta();
-        
-        QJsonArray dataArr;
-        for (int i=0; i<8; i++) {
-             QJsonObject dObj;
-             dObj["value"] = sniff->getData(i);
-             dObj["changed"] = (sniff->dataChange(i) != NO);
-             dataArr.append(dObj);
-        }
-        obj["data"] = dataArr;
-        items.append(obj);
-    }
-    result["tracked_ids"] = items;
-    result["active_count"] = mMap.size();
-    return result;
-}
+
 
 void SnifferModel::update(CANConnection*, QVector<CANFrame>& pFrames)
 {

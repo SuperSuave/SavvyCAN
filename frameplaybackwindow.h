@@ -19,9 +19,9 @@ public:
     explicit FramePlaybackWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FramePlaybackWindow();
     
-    void mcpPlaybackPlay();
-    void mcpPlaybackPause();
-    void mcpPlaybackStop();
+    void playPlayback();
+    void pausePlayback();
+    void stopPlayback();
 
 private slots:
     void btnBackOneClick();

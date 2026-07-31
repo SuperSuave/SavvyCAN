@@ -271,7 +271,7 @@ int main(int argc, char *argv[])
     
     if (settings.value("MCP/Enable", true).toBool()) {
         MCPServer *mcpServer = new MCPServer(&a);
-        QObject::connect(mcpServer, &MCPServer::clientCountChanged, a.mainWindow, &MainWindow::updateMCPStatus);
+        QObject::connect(mcpServer, &MCPServer::clientCountChanged, a.mainWindow, &MainWindow::updateCopilotStatus);
         mcpServer->start(settings.value("MCP/Port", "8888").toInt());
     }
     

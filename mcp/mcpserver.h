@@ -27,6 +27,8 @@ private slots:
 
 private:
     void processMessage(const QJsonObject &request, QTcpSocket *client);
+    void handleToolsList(QJsonObject &response);
+    void handleToolsCall(const QJsonObject &request, QJsonObject &response);
     void sendResponse(const QJsonObject &response, QTcpSocket *client);
     
     QTcpServer *tcpServer;

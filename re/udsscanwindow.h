@@ -59,9 +59,9 @@ public:
     explicit UDSScanWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~UDSScanWindow();
 
-    void mcpOpenAndConfigure(int startId, int endId, int bus, int scanType);
-    void mcpStartScan();
-    void mcpStopScan();
+    void openAndConfigure(int startId, int endId, int bus, int scanType);
+    void startFuzzingScan();
+    void stopFuzzingScan();
 
 private slots:
     void updatedFrames(int numFrames);

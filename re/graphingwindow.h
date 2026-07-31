@@ -4,8 +4,7 @@
 #include "qcustomplot.h"
 #include "can_structs.h"
 #include "dbc/dbchandler.h"
-#include <QJsonArray>
-#include <QJsonObject>
+
 
 #include <QDialog>
 
@@ -61,9 +60,9 @@ public:
 
 public slots:
     void createGraph(GraphParams &params, bool createGraphParam = true);
-    void mcpOpenForSignal(int messageId, QString signalName);
-    QJsonArray mcpGetGraphData(int graphIdx = 0, int limit = 100);
-    QString mcpTakeScreenshot(QString filepath);
+    void openForSignal(int messageId, QString signalName);
+    const QList<GraphParams>& getGraphParamsList() const { return graphParams; }
+    QString takeScreenshot(QString filepath);
 
 private slots:
     void titleDoubleClick(QMouseEvent *event, QCPTextElement *title);
