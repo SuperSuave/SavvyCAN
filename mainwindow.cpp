@@ -11,6 +11,8 @@
 #include "filterutility.h"
 
 #include <QClipboard>
+#include <QSortFilterProxyModel>
+#include <limits>
 /*
 Some notes on things I'd like to put into the program but haven't put on github (yet)
 
@@ -684,6 +686,41 @@ void MainWindow::expandAllRows()
     }
 }
 
+int64_t MainWindow::selectedFrameTimestamp()
+{
+    QModelIndex proxyIdx = ui->canFramesView->currentIndex();
+    if (!proxyIdx.isValid()) return -1;
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    int row = proxy ? proxy->mapToSource(proxyIdx).row() : proxyIdx.row();
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (row < 0 || row >= filtered->count()) return -1;
+    const CANFrame &f = filtered->at(row);
+    return f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+}
+
+void MainWindow::scrollToNearestTimestamp(int64_t timestamp)
+{
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (timestamp < 0 || filtered->isEmpty()) return;
+    int lo = 0, hi = filtered->count() - 1, best = 0;
+    int64_t bestDiff = std::numeric_limits<int64_t>::max();
+    while (lo <= hi)
+    {
+        int mid = (lo + hi) / 2;
+        const CANFrame &f = filtered->at(mid);
+        int64_t ts = f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+        int64_t diff = qAbs(ts - timestamp);
+        if (diff < bestDiff) { bestDiff = diff; best = mid; }
+        if (ts < timestamp) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    QModelIndex sourceIdx = model->index(best, 0);
+    QModelIndex viewIdx = proxy ? proxy->mapFromSource(sourceIdx) : sourceIdx;
+    ui->canFramesView->setCurrentIndex(viewIdx);
+    ui->canFramesView->scrollTo(viewIdx, QAbstractItemView::PositionAtCenter);
+}
+
 void MainWindow::manageRowExpansion()
 {
     int numRows = ui->canFramesView->model()->rowCount();
@@ -968,30 +1005,26 @@ void MainWindow::updateFilterList()
 void MainWindow::filterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
 void MainWindow::busFilterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setBusFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -999,12 +1032,12 @@ void MainWindow::filterSetAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Checked);
-    }
     inhibitFilterUpdate = false;
-    model->setAllFilters(true);
 
+    int64_t savedTs = selectedFrameTimestamp();
+    model->setAllFilters(true);
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -1012,9 +1045,7 @@ void MainWindow::filterClearAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Unchecked);
-    }
     inhibitFilterUpdate = false;
     model->setAllFilters(false);
 }
@@ -1136,6 +1167,7 @@ void MainWindow::clearFrames()
 void MainWindow::normalizeTiming()
 {
     model->normalizeTiming();
+    model->setTimeStyle(TS_SECONDS);
     emit framesUpdated(-2); //claim an all new set of frames because every frame was updated.
 }
 
