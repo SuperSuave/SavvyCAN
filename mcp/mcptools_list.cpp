@@ -223,12 +223,13 @@ void MCPServer::handleToolsList(QJsonObject &response)
 
         QJsonObject manageFileTool;
         manageFileTool["name"] = "manage_dbc_file";
-        manageFileTool["description"] = "Create, load, or save a DBC file.";
+        manageFileTool["description"] = "Create, load, refresh, or save a DBC file.";
         QJsonObject manageFileSchema;
         manageFileSchema["type"] = "object";
         QJsonObject manageFileProps;
-        manageFileProps["action"] = QJsonObject({{"type", "string"}, {"enum", QJsonArray() << "create" << "load" << "save"}});
-        manageFileProps["filename"] = QJsonObject({{"type", "string"}, {"description", "Absolute path to the DBC file"}});
+        manageFileProps["action"] = QJsonObject({{"type", "string"}, {"enum", QJsonArray() << "create" << "load" << "save" << "refresh"}});
+        manageFileProps["filename"] = QJsonObject({{"type", "string"}, {"description", "Absolute path to the DBC file. Used for load and refresh (if reloading by name)."}});
+        manageFileProps["forceOverride"] = QJsonObject({{"type", "boolean"}, {"description", "If true, discards unsaved changes during refresh."}});
         manageFileSchema["properties"] = manageFileProps;
         manageFileSchema["required"] = QJsonArray() << "action";
         manageFileTool["inputSchema"] = manageFileSchema;

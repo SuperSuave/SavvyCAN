@@ -532,6 +532,9 @@ private:
     void addFrameToDisplay(CANFrame &, bool);
     void updateFileStatus();
     void closeEvent(QCloseEvent *event);
+    void onDbcNeedsRefresh(int idx);
+
+private slots:
     void killEmAll();
     void killWindow(QDialog *win);
     void readSettings();

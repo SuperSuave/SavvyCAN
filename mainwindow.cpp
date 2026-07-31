@@ -68,6 +68,14 @@ MainWindow *MainWindow::getReference()
     return selfRef;
 }
 
+void MainWindow::onDbcNeedsRefresh(int idx)
+{
+    DBCFile *file = dbcHandler->getFileByIdx(idx);
+    if (file) {
+        statusBar()->showMessage(tr("DBC Update Available (Unsaved Changes in %1)").arg(file->getFilename()), 10000);
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -170,6 +178,7 @@ MainWindow::MainWindow(QWidget *parent) :
     dbcComparatorWindow = nullptr;
     canBridgeWindow = nullptr;
     dbcHandler = DBCHandler::getReference();
+    connect(dbcHandler, &DBCHandler::fileNeedsRefresh, this, &MainWindow::onDbcNeedsRefresh);
     bDirty = false;
     inhibitFilterUpdate = false;
     rxFrames = 0;

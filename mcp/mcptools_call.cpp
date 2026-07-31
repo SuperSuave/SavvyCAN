@@ -631,6 +631,31 @@ void MCPServer::handleToolsCall(const QJsonObject &request, QJsonObject &respons
                 } else {
                     resultData["error"] = "No DBC files currently loaded";
                 }
+            } else if (action == "refresh") {
+                bool forceOverride = params["arguments"].toObject()["forceOverride"].toBool();
+                int idxToRefresh = -1;
+                
+                if (!filename.isEmpty()) {
+                    for (int i = 0; i < handler->getFileCount(); i++) {
+                        DBCFile *f = handler->getFileByIdx(i);
+                        if (f && (f->getFullFilename() == filename || f->getFilename() == filename)) {
+                            idxToRefresh = i;
+                            break;
+                        }
+                    }
+                } else if (handler->getFileCount() > 0) {
+                    idxToRefresh = 0;
+                }
+                
+                if (idxToRefresh >= 0) {
+                    if (handler->refreshDBCFile(idxToRefresh, forceOverride)) {
+                        resultData["success"] = true;
+                    } else {
+                        resultData["error"] = "Failed to refresh DBC file. It might have unsaved changes. Use forceOverride=true to override.";
+                    }
+                } else {
+                    resultData["error"] = "DBC file not found or not loaded";
+                }
             }
             
             QJsonObject item;

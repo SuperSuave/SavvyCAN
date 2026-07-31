@@ -1891,6 +1891,9 @@ DBCFile* DBCHandler::loadDBCFile(QString filename)
     if (newFile.loadFile(filename))
     {
         loadedFiles.append(newFile);
+        if (fileWatcher) {
+            fileWatcher->addPath(newFile.getFullFilename());
+        }
     }
     else
     {
@@ -2273,11 +2276,19 @@ void DBCHandler::removeDBCFile(int idx)
     if (loadedFiles.count() == 0) return;
     if (idx < 0) return;
     if (idx >= loadedFiles.count()) return;
+    if (fileWatcher) {
+        fileWatcher->removePath(loadedFiles[idx].getFullFilename());
+    }
     loadedFiles.removeAt(idx);
 }
 
 void DBCHandler::removeAllFiles()
 {
+    for (int i = 0; i < loadedFiles.count(); i++) {
+        if (fileWatcher) {
+            fileWatcher->removePath(loadedFiles[i].getFullFilename());
+        }
+    }
     loadedFiles.clear();
 }
 
@@ -2428,6 +2439,9 @@ DBCFile* DBCHandler::getFileByName(QString name)
 
 DBCHandler::DBCHandler()
 {
+    fileWatcher = new QFileSystemWatcher(this);
+    connect(fileWatcher, &QFileSystemWatcher::fileChanged, this, &DBCHandler::onFileChangedOnDisk);
+
     // Load previously saved DBC file settings
     QSettings settings;
     qDebug() <<"Settings file: " << settings.fileName();
@@ -2477,4 +2491,37 @@ DBCHandler* DBCHandler::getReference()
 {
     if (!instance) instance = new DBCHandler();
     return instance;
+}
+
+void DBCHandler::onFileChangedOnDisk(const QString &path)
+{
+    for (int i = 0; i < loadedFiles.count(); i++) {
+        if (loadedFiles[i].getFullFilename() == path) {
+            if (!refreshDBCFile(i, false) && loadedFiles[i].getDirtyFlag()) {
+                emit fileNeedsRefresh(i);
+            }
+            break;
+        }
+    }
+}
+
+bool DBCHandler::refreshDBCFile(int idx, bool forceOverride)
+{
+    if (idx < 0 || idx >= loadedFiles.count()) return false;
+    DBCFile *file = &loadedFiles[idx];
+    
+    if (file->getDirtyFlag() && !forceOverride) {
+        return false;
+    }
+    
+    QString path = file->getFullFilename();
+    int assocBus = file->getAssocBus();
+    
+    if (file->loadFile(path)) {
+        file->setAssocBus(assocBus);
+        file->clearDirtyFlag();
+        emit fileUpdated(idx);
+        return true;
+    }
+    return false;
 }
