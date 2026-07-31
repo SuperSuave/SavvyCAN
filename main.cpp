@@ -11,8 +11,7 @@
 #include <QColor>
 #include <QFont>
 #include "mcp/mcpserver.h"
-#include "mcp/mcpserver.h"
-
+#include "utils/logger.h"
 
 class SavvyLensApplication : public QApplication
 {
@@ -221,6 +220,9 @@ static void applyDarkPalette(QApplication &app)
 
 int main(int argc, char *argv[])
 {
+    // Initialize crash handler and Qt message logging
+    Logger::init();
+
 #ifdef QT_DEBUG
     //uncomment for verbose debug data in application output
     //qputenv("QT_FATAL_WARNINGS", "1");
@@ -228,6 +230,7 @@ int main(int argc, char *argv[])
 #endif
 
     SavvyLensApplication a(argc, argv);
+
 
     //Add a local path for Qt extensions, to allow for per-application extensions.
     a.addLibraryPath("plugins");
