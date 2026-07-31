@@ -276,6 +276,10 @@ int main(int argc, char *argv[])
     }
     
     a.mainWindow->show();
+    
+    if (argc > 1) {
+        a.mainWindow->handleDroppedFile(QString(argv[1]));
+    }
 
     int retCode = a.exec();
 

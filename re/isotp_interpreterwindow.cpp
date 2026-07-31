@@ -245,7 +245,33 @@ void ISOTP_InterpreterWindow::saveList()
         }
     }
 }
+QJsonArray ISOTP_InterpreterWindow::mcpGetMessages(int limit)
+{
+    QJsonArray result;
+    int count = 0;
+    // Iterate from end to get most recent messages
+    for (int i = messages.size() - 1; i >= 0 && count < limit; --i) {
+        ISOTP_MESSAGE msg = messages.at(i);
+        QJsonObject msgObj;
+        msgObj["timestamp"] = (qint64)msg.timeStamp().microSeconds();
+        msgObj["id"] = (int)msg.frameId();
+        msgObj["bus"] = msg.bus;
+        msgObj["length"] = msg.reportedLength;
+        msgObj["data_hex"] = QString(msg.payload().toHex());
+        msgObj["is_rx"] = msg.isReceived;
+        
+        result.insert(0, msgObj); // Insert at 0 so the array is in chronological order
+        count++;
+    }
+    return result;
+}
 
+void ISOTP_InterpreterWindow::mcpSendISOTPFrame(int bus, int id, QByteArray data)
+{
+    if (decoder) {
+        decoder->sendISOTPFrame(bus, id, data);
+    }
+}
 
 void ISOTP_InterpreterWindow::useExtendedAddressing(bool checked)
 {

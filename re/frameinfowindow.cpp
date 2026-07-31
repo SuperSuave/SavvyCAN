@@ -742,6 +742,39 @@ void FrameInfoWindow::updateDetailsWindow(QString newID)
             tempItem = new QTreeWidgetItem();
             tempItem->setText(0, tr("Range: ") + Utility::formatNumber((unsigned int)minData[c]) + tr(" to ") + Utility::formatNumber((unsigned int)maxData[c]));
             dataBase->addChild(tempItem);
+
+            // Calculate byte classification for AI and user
+            QString classification;
+            if (minData[c] == maxData[c]) {
+                classification = "Constant";
+            } else {
+                int incCount = 0;
+                int decCount = 0;
+                int changes = 0;
+                for (int i = 1; i < byteGraphY[c].size(); i++) {
+                    int diff = (int)byteGraphY[c][i] - (int)byteGraphY[c][i-1];
+                    if (diff != 0) {
+                        changes++;
+                        if (diff == 1 || diff < -10) incCount++;
+                        else if (diff == -1 || diff > 10) decCount++;
+                    }
+                }
+                if (changes == 0) {
+                    classification = "Constant";
+                } else if (incCount >= changes * 0.8) {
+                    classification = "Counter (Incrementing)";
+                } else if (decCount >= changes * 0.8) {
+                    classification = "Counter (Decrementing)";
+                } else if (changes > byteGraphY[c].size() * 0.5) {
+                    classification = "Noisy / Checksum / High Variance";
+                } else {
+                    classification = "Status / State Machine / Low Variance";
+                }
+            }
+            tempItem = new QTreeWidgetItem();
+            tempItem->setText(0, tr("AI Classification: ") + classification);
+            dataBase->addChild(tempItem);
+
             histBase->setText(0, tr("Histogram"));
             dataBase->addChild(histBase);
 
@@ -932,26 +965,42 @@ void FrameInfoWindow::dumpNode(QTreeWidgetItem* item, QFile *file, int indent)
         dumpNode( item->child(i), file, indent + 1 );
 }
 
-QJsonObject FrameInfoWindow::nodeToJson(QTreeWidgetItem* item)
+QJsonObject FrameInfoWindow::nodeToJson(QTreeWidgetItem* item, bool excludeHistograms)
 {
     QJsonObject obj;
     obj["text"] = item->text(0);
     if (item->childCount() > 0) {
         QJsonArray children;
         for( int i = 0; i < item->childCount(); ++i ) {
-            children.append(nodeToJson(item->child(i)));
+            QTreeWidgetItem* child = item->child(i);
+            if (excludeHistograms) {
+                QString text = child->text(0);
+                if (text == tr("Histogram") || text == tr("Bitfield Histogram") || text == tr("Bitchange Heatmap")) {
+                    continue;
+                }
+            }
+            children.append(nodeToJson(child, excludeHistograms));
         }
-        obj["children"] = children;
+        if (!children.isEmpty()) {
+            obj["children"] = children;
+        }
     }
     return obj;
 }
 
-QJsonArray FrameInfoWindow::getStatisticsAsJson()
+QJsonArray FrameInfoWindow::getStatisticsAsJson(bool excludeHistograms)
 {
     QJsonArray result;
     QTreeWidgetItem *root = ui->treeDetails->invisibleRootItem();
     for (int i = 0; i < root->childCount(); ++i) {
-        result.append(nodeToJson(root->child(i)));
+        QTreeWidgetItem* child = root->child(i);
+        if (excludeHistograms) {
+            QString text = child->text(0);
+            if (text == tr("Histogram") || text == tr("Bitfield Histogram") || text == tr("Bitchange Heatmap")) {
+                continue;
+            }
+        }
+        result.append(nodeToJson(child, excludeHistograms));
     }
     return result;
 }

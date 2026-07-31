@@ -25,7 +25,7 @@ public:
     ~FrameInfoWindow();
     void showEvent(QShowEvent*);
     void selectID(QString idStr);
-    QJsonArray getStatisticsAsJson();
+    QJsonArray getStatisticsAsJson(bool excludeHistograms = true);
 
 private slots:
     void updateDetailsWindow(QString);
@@ -60,7 +60,7 @@ private:
     void readSettings();
     void writeSettings();
     void dumpNode(QTreeWidgetItem* item, QFile *file, int indent);
-    QJsonObject nodeToJson(QTreeWidgetItem* item);
+    QJsonObject nodeToJson(QTreeWidgetItem* item, bool excludeHistograms = true);
 };
 
 #endif // FRAMEINFOWINDOW_H

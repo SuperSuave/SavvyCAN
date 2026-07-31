@@ -1639,6 +1639,32 @@ void GraphingWindow::mcpOpenForSignal(int messageId, QString signalName)
     ui->graphingView->replot();
 }
 
+QJsonArray GraphingWindow::mcpGetGraphData(int graphIdx, int limit)
+{
+    QJsonArray result;
+    if (graphIdx < 0 || graphIdx >= graphParams.count()) return result;
+    
+    GraphParams &gp = graphParams[graphIdx];
+    int count = 0;
+    // Iterate from end to get most recent data points
+    for (int i = gp.x.size() - 1; i >= 0 && count < limit; --i) {
+        QJsonObject pt;
+        pt["x"] = gp.x.at(i);
+        pt["y"] = gp.y.at(i);
+        result.insert(0, pt);
+        count++;
+    }
+    return result;
+}
+
+QString GraphingWindow::mcpTakeScreenshot(QString filepath)
+{
+    if (ui->graphingView->grab().save(filepath)) {
+        return filepath;
+    }
+    return "";
+}
+
 GraphParams::GraphParams()
 {
     ID = 0;

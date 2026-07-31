@@ -504,6 +504,21 @@ void FrameSenderWindow::loadSenderFile(QString filename)
     delete inFile;
 }
 
+void FrameSenderWindow::mcpStartAll()
+{
+    enableAll();
+}
+
+void FrameSenderWindow::mcpStopAll()
+{
+    disableAll();
+}
+
+void FrameSenderWindow::mcpClearAll()
+{
+    clearGrid();
+}
+
 void FrameSenderWindow::onCellDoubleTap(int row, int column)
 {
     if (column == ST_COLS::SENDTAB_COL_TRIGGER)

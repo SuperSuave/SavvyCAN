@@ -39,6 +39,9 @@ public:
     ~FrameSenderWindow();
 
     void mcpOpenAndAddSequence(int bus, int id, QByteArray data, int intervalMs);
+    void mcpStartAll();
+    void mcpStopAll();
+    void mcpClearAll();
 
 private slots:
     void onCellChanged(int, int);

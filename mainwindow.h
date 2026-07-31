@@ -89,7 +89,7 @@ public:
 
     void handleDroppedFile(const QString &filename);
 
-private slots:
+public slots:
     void handleLoadFile();
     void handleSaveFile();
     void handleSaveFilteredFile();
@@ -174,6 +174,8 @@ public slots:
     FrameSenderWindow* getFrameSenderWindow() const;
     SignalViewerWindow* getSignalViewerWindow() const;
     GraphingWindow* getGraphingWindow() const;
+    FramePlaybackWindow* getPlaybackWindow() const;
+    ConnectionWindow* getConnectionWindow() const;
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();

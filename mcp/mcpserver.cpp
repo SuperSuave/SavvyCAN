@@ -7,6 +7,8 @@
 #include "../utility.h"
 #include "../connections/canconmanager.h"
 #include "../dbc/dbchandler.h"
+#include "../connections/connectionwindow.h"
+#include "../frameplaybackwindow.h"
 #include "../re/udsscanwindow.h"
 #include "../re/isotp_interpreterwindow.h"
 #include "../re/graphingwindow.h"
@@ -362,6 +364,21 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         addFrameSenderSchema["required"] = QJsonArray() << "bus" << "id" << "data" << "intervalMs";
         addFrameSenderTool["inputSchema"] = addFrameSenderSchema;
         
+        QJsonObject startFrameSenderTool;
+        startFrameSenderTool["name"] = "start_frame_sender";
+        startFrameSenderTool["description"] = "Enable and start sending all frame sequences in the Frame Sender.";
+        startFrameSenderTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
+        QJsonObject stopFrameSenderTool;
+        stopFrameSenderTool["name"] = "stop_frame_sender";
+        stopFrameSenderTool["description"] = "Disable and stop sending all frame sequences in the Frame Sender.";
+        stopFrameSenderTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
+        QJsonObject clearFrameSenderTool;
+        clearFrameSenderTool["name"] = "clear_frame_sender";
+        clearFrameSenderTool["description"] = "Clear all frame sequences in the Frame Sender.";
+        clearFrameSenderTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
         QJsonObject openSignalViewerTool;
         openSignalViewerTool["name"] = "open_signal_viewer";
         openSignalViewerTool["description"] = "Open a signal in the Signal Viewer window.";
@@ -386,6 +403,69 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         openGraphSchema["required"] = QJsonArray() << "messageId" << "signalName";
         openGraphTool["inputSchema"] = openGraphSchema;
         
+        QJsonObject queryGraphDataTool;
+        queryGraphDataTool["name"] = "query_graph_data";
+        queryGraphDataTool["description"] = "Fetch data points for a specific graph in the Graphing window.";
+        QJsonObject queryGraphDataSchema;
+        queryGraphDataSchema["type"] = "object";
+        QJsonObject queryGraphDataProps;
+        queryGraphDataProps["graphIdx"] = QJsonObject({{"type", "integer"}, {"description", "Index of the graph (0 for first graph)"}});
+        queryGraphDataProps["limit"] = QJsonObject({{"type", "integer"}, {"description", "Maximum number of points to return (default 100)"}});
+        queryGraphDataSchema["properties"] = queryGraphDataProps;
+        queryGraphDataTool["inputSchema"] = queryGraphDataSchema;
+        
+        QJsonObject takeGraphScreenshotTool;
+        takeGraphScreenshotTool["name"] = "take_graph_screenshot";
+        takeGraphScreenshotTool["description"] = "Take a screenshot of the Graphing window and save to disk.";
+        QJsonObject takeGraphScreenshotSchema;
+        takeGraphScreenshotSchema["type"] = "object";
+        QJsonObject takeGraphScreenshotProps;
+        takeGraphScreenshotProps["filepath"] = QJsonObject({{"type", "string"}, {"description", "Absolute path to save the image (e.g. /tmp/graph.png)"}});
+        takeGraphScreenshotSchema["properties"] = takeGraphScreenshotProps;
+        takeGraphScreenshotSchema["required"] = QJsonArray() << "filepath";
+        takeGraphScreenshotTool["inputSchema"] = takeGraphScreenshotSchema;
+        QJsonObject startPlaybackTool;
+        startPlaybackTool["name"] = "start_playback";
+        startPlaybackTool["description"] = "Start playback of loaded logs in the Frame Playback window.";
+        startPlaybackTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
+        QJsonObject pausePlaybackTool;
+        pausePlaybackTool["name"] = "pause_playback";
+        pausePlaybackTool["description"] = "Pause playback of loaded logs in the Frame Playback window.";
+        pausePlaybackTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
+        QJsonObject stopPlaybackTool;
+        stopPlaybackTool["name"] = "stop_playback";
+        stopPlaybackTool["description"] = "Stop and reset playback in the Frame Playback window.";
+        stopPlaybackTool["inputSchema"] = QJsonObject({{"type", "object"}, {"properties", QJsonObject()}});
+        
+        QJsonObject connectBusTool;
+        connectBusTool["name"] = "connect_bus";
+        connectBusTool["description"] = "Connect a new CAN bus or device.";
+        QJsonObject connectBusSchema;
+        connectBusSchema["type"] = "object";
+        QJsonObject connectBusProps;
+        connectBusProps["type"] = QJsonObject({{"type", "integer"}, {"description", "Connection type enum (e.g. 0=GVRET, 1=KVASER, etc.)"}});
+        connectBusProps["portName"] = QJsonObject({{"type", "string"}});
+        connectBusProps["driverName"] = QJsonObject({{"type", "string"}});
+        connectBusProps["serialSpeed"] = QJsonObject({{"type", "integer"}});
+        connectBusProps["busSpeed"] = QJsonObject({{"type", "integer"}});
+        connectBusProps["isCanFd"] = QJsonObject({{"type", "boolean"}});
+        connectBusProps["dataRate"] = QJsonObject({{"type", "integer"}});
+        connectBusSchema["properties"] = connectBusProps;
+        connectBusTool["inputSchema"] = connectBusSchema;
+        
+        QJsonObject disconnectBusTool;
+        disconnectBusTool["name"] = "disconnect_bus";
+        disconnectBusTool["description"] = "Disconnect a CAN bus by index.";
+        QJsonObject disconnectBusSchema;
+        disconnectBusSchema["type"] = "object";
+        QJsonObject disconnectBusProps;
+        disconnectBusProps["index"] = QJsonObject({{"type", "integer"}});
+        disconnectBusSchema["properties"] = disconnectBusProps;
+        disconnectBusSchema["required"] = QJsonArray() << "index";
+        disconnectBusTool["inputSchema"] = disconnectBusSchema;
+        
         tools.append(pingTool);
         tools.append(analyzeTool);
         tools.append(queryTool);
@@ -403,10 +483,45 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
         tools.append(openUdsTool);
         tools.append(startUdsTool);
         tools.append(stopUdsTool);
+        QJsonObject queryIsotpTool;
+        queryIsotpTool["name"] = "query_isotp_messages";
+        queryIsotpTool["description"] = "Fetch decoded ISO-TP messages from the Interpreter window.";
+        QJsonObject queryIsotpSchema;
+        queryIsotpSchema["type"] = "object";
+        QJsonObject queryIsotpProps;
+        queryIsotpProps["limit"] = QJsonObject({{"type", "integer"}, {"description", "Maximum number of messages to return (default 50)"}});
+        queryIsotpSchema["properties"] = queryIsotpProps;
+        queryIsotpTool["inputSchema"] = queryIsotpSchema;
+        
+        QJsonObject sendIsotpTool;
+        sendIsotpTool["name"] = "send_isotp_message";
+        sendIsotpTool["description"] = "Inject an ISO-TP message (handles segmentation automatically).";
+        QJsonObject sendIsotpSchema;
+        sendIsotpSchema["type"] = "object";
+        QJsonObject sendIsotpProps;
+        sendIsotpProps["bus"] = QJsonObject({{"type", "integer"}});
+        sendIsotpProps["id"] = QJsonObject({{"type", "integer"}});
+        sendIsotpProps["data"] = QJsonObject({{"type", "string"}, {"description", "Hex string of the full payload to send"}});
+        sendIsotpSchema["properties"] = sendIsotpProps;
+        sendIsotpSchema["required"] = QJsonArray() << "bus" << "id" << "data";
+        sendIsotpTool["inputSchema"] = sendIsotpSchema;
+        
         tools.append(openIsotpTool);
+        tools.append(queryIsotpTool);
+        tools.append(sendIsotpTool);
         tools.append(addFrameSenderTool);
+        tools.append(startFrameSenderTool);
+        tools.append(stopFrameSenderTool);
+        tools.append(clearFrameSenderTool);
         tools.append(openSignalViewerTool);
         tools.append(openGraphTool);
+        tools.append(queryGraphDataTool);
+        tools.append(takeGraphScreenshotTool);
+        tools.append(startPlaybackTool);
+        tools.append(pausePlaybackTool);
+        tools.append(stopPlaybackTool);
+        tools.append(connectBusTool);
+        tools.append(disconnectBusTool);
         result["tools"] = tools;
         response["result"] = result;
     }
@@ -424,11 +539,16 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             content.append(item);
         } else if (toolName == "analyze_frame_data") {
             QString frameId = params["arguments"].toObject()["frameId"].toString();
-            
-            // This runs on the main GUI thread, so it's safe to manipulate the UI
-            MainWindow::getReference()->analyzeFrameData(frameId);
+            if (!frameId.startsWith("0x", Qt::CaseInsensitive) && !frameId.startsWith("x", Qt::CaseInsensitive)) {
+                frameId = "0x" + frameId;
+            }
             
             uint32_t idInt = Utility::ParseStringToNum(frameId);
+            QString standardId = Utility::formatCANID(idInt);
+            
+            // This runs on the main GUI thread, so it's safe to manipulate the UI
+            MainWindow::getReference()->analyzeFrameData(standardId);
+            
             const QVector<CANFrame> *frames = MainWindow::getReference()->getCANFrameModel()->getListReference();
             QJsonArray matchedFrames;
             int count = 0;
@@ -462,7 +582,11 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             bool filterId = args.contains("frameId");
             uint32_t targetId = 0;
             if (filterId) {
-                targetId = Utility::ParseStringToNum(args["frameId"].toString());
+                QString fId = args["frameId"].toString();
+                if (!fId.startsWith("0x", Qt::CaseInsensitive) && !fId.startsWith("x", Qt::CaseInsensitive)) {
+                    fId = "0x" + fId;
+                }
+                targetId = Utility::ParseStringToNum(fId);
             }
             
             bool filterBus = args.contains("bus");
@@ -538,22 +662,31 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             QJsonObject resultData;
             
             if (target == "sniffer") {
+                if (!MainWindow::getReference()->getSnifferWindow()) {
+                     MainWindow::getReference()->showSnifferWindow();
+                }
                 if (MainWindow::getReference()->getSnifferWindow()) {
                      resultData = MainWindow::getReference()->getSnifferWindow()->getSnifferData();
                 } else {
-                     resultData["error"] = "Sniffer window not open or unavailable";
+                     resultData["error"] = "Sniffer window could not be opened";
                 }
             } else if (target == "flowview") {
+                if (!MainWindow::getReference()->getFlowViewWindow()) {
+                     MainWindow::getReference()->showFlowViewWindow();
+                }
                 if (MainWindow::getReference()->getFlowViewWindow()) {
                      resultData = MainWindow::getReference()->getFlowViewWindow()->getFlowViewStats();
                 } else {
-                     resultData["error"] = "Flow View window not open or unavailable";
+                     resultData["error"] = "Flow View window could not be opened";
                 }
             } else if (target == "bisect") {
+                if (!MainWindow::getReference()->getBisectWindow()) {
+                     MainWindow::getReference()->showBisectWindow();
+                }
                 if (MainWindow::getReference()->getBisectWindow()) {
                      resultData = MainWindow::getReference()->getBisectWindow()->getBisectStatus();
                 } else {
-                     resultData["error"] = "Bisect window not open or unavailable";
+                     resultData["error"] = "Bisect window could not be opened";
                 }
             } else {
                 resultData["error"] = "Unknown analysis tool requested";
@@ -592,6 +725,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             int fuzzType = params["arguments"].toObject()["fuzzType"].toInt();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->showFuzzingWindow();
+            }
             if (MainWindow::getReference()->getFuzzingWindow()) {
                 MainWindow::getReference()->getFuzzingWindow()->mcpConfigure(startId, endId, intervalMs, fuzzType);
                 resultData["success"] = true;
@@ -606,6 +742,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             
         } else if (toolName == "start_fuzzer") {
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->showFuzzingWindow();
+            }
             if (MainWindow::getReference()->getFuzzingWindow()) {
                 MainWindow::getReference()->getFuzzingWindow()->mcpStart();
                 resultData["success"] = true;
@@ -620,6 +759,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             
         } else if (toolName == "stop_fuzzer") {
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getFuzzingWindow()) {
+                MainWindow::getReference()->showFuzzingWindow();
+            }
             if (MainWindow::getReference()->getFuzzingWindow()) {
                 MainWindow::getReference()->getFuzzingWindow()->mcpStop();
                 resultData["success"] = true;
@@ -935,6 +1077,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             int scanType = params["arguments"].toObject()["scanType"].toInt();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getUDSScanWindow()) {
+                MainWindow::getReference()->showUDSScanWindow();
+            }
             if (MainWindow::getReference()->getUDSScanWindow()) {
                 MainWindow::getReference()->getUDSScanWindow()->mcpOpenAndConfigure(startId, endId, bus, scanType);
                 resultData["success"] = true;
@@ -949,6 +1094,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             
         } else if (toolName == "start_uds_scan") {
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getUDSScanWindow()) {
+                MainWindow::getReference()->showUDSScanWindow();
+            }
             if (MainWindow::getReference()->getUDSScanWindow()) {
                 MainWindow::getReference()->getUDSScanWindow()->mcpStartScan();
                 resultData["success"] = true;
@@ -963,6 +1111,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             
         } else if (toolName == "stop_uds_scan") {
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getUDSScanWindow()) {
+                MainWindow::getReference()->showUDSScanWindow();
+            }
             if (MainWindow::getReference()->getUDSScanWindow()) {
                 MainWindow::getReference()->getUDSScanWindow()->mcpStopScan();
                 resultData["success"] = true;
@@ -979,8 +1130,56 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             int rxId = params["arguments"].toObject()["rxId"].toInt();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getISOTPWindow()) {
+                MainWindow::getReference()->showISOInterpreterWindow();
+            }
             if (MainWindow::getReference()->getISOTPWindow()) {
                 MainWindow::getReference()->getISOTPWindow()->mcpOpenAndConfigure(rxId);
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "ISO-TP window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "query_isotp_messages") {
+            int limit = 50;
+            if (params["arguments"].toObject().contains("limit")) {
+                limit = params["arguments"].toObject()["limit"].toInt();
+            }
+            
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getISOTPWindow()) {
+                MainWindow::getReference()->showISOInterpreterWindow();
+            }
+            if (MainWindow::getReference()->getISOTPWindow()) {
+                QJsonArray msgs = MainWindow::getReference()->getISOTPWindow()->mcpGetMessages(limit);
+                resultData["messages"] = msgs;
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "ISO-TP window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "send_isotp_message") {
+            int bus = params["arguments"].toObject()["bus"].toInt();
+            int id = params["arguments"].toObject()["id"].toInt();
+            QString dataStr = params["arguments"].toObject()["data"].toString();
+            QByteArray data = QByteArray::fromHex(dataStr.toUtf8());
+            
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getISOTPWindow()) {
+                MainWindow::getReference()->showISOInterpreterWindow();
+            }
+            if (MainWindow::getReference()->getISOTPWindow()) {
+                MainWindow::getReference()->getISOTPWindow()->mcpSendISOTPFrame(bus, id, data);
                 resultData["success"] = true;
             } else {
                 resultData["error"] = "ISO-TP window not open or unavailable";
@@ -999,8 +1198,62 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             int intervalMs = params["arguments"].toObject()["intervalMs"].toInt();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->showFrameSenderWindow();
+            }
             if (MainWindow::getReference()->getFrameSenderWindow()) {
                 MainWindow::getReference()->getFrameSenderWindow()->mcpOpenAndAddSequence(bus, id, data, intervalMs);
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Frame Sender window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "start_frame_sender") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->showFrameSenderWindow();
+            }
+            if (MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->getFrameSenderWindow()->mcpStartAll();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Frame Sender window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "stop_frame_sender") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->showFrameSenderWindow();
+            }
+            if (MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->getFrameSenderWindow()->mcpStopAll();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Frame Sender window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "clear_frame_sender") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->showFrameSenderWindow();
+            }
+            if (MainWindow::getReference()->getFrameSenderWindow()) {
+                MainWindow::getReference()->getFrameSenderWindow()->mcpClearAll();
                 resultData["success"] = true;
             } else {
                 resultData["error"] = "Frame Sender window not open or unavailable";
@@ -1016,6 +1269,9 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             QString signalName = params["arguments"].toObject()["signalName"].toString();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getSignalViewerWindow()) {
+                MainWindow::getReference()->showSignalViewer();
+            }
             if (MainWindow::getReference()->getSignalViewerWindow()) {
                 MainWindow::getReference()->getSignalViewerWindow()->mcpOpenForSignal(messageId, signalName);
                 resultData["success"] = true;
@@ -1033,11 +1289,160 @@ void MCPServer::processMessage(const QJsonObject &request, QTcpSocket *client)
             QString signalName = params["arguments"].toObject()["signalName"].toString();
             
             QJsonObject resultData;
+            if (!MainWindow::getReference()->getGraphingWindow()) {
+                MainWindow::getReference()->showGraphingWindow();
+            }
             if (MainWindow::getReference()->getGraphingWindow()) {
                 MainWindow::getReference()->getGraphingWindow()->mcpOpenForSignal(messageId, signalName);
                 resultData["success"] = true;
             } else {
                 resultData["error"] = "Graphing window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "query_graph_data") {
+            int graphIdx = 0;
+            int limit = 100;
+            if (params["arguments"].toObject().contains("graphIdx")) {
+                graphIdx = params["arguments"].toObject()["graphIdx"].toInt();
+            }
+            if (params["arguments"].toObject().contains("limit")) {
+                limit = params["arguments"].toObject()["limit"].toInt();
+            }
+            
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getGraphingWindow()) {
+                MainWindow::getReference()->showGraphingWindow();
+            }
+            if (MainWindow::getReference()->getGraphingWindow()) {
+                QJsonArray data = MainWindow::getReference()->getGraphingWindow()->mcpGetGraphData(graphIdx, limit);
+                resultData["data"] = data;
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Graphing window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "take_graph_screenshot") {
+            QString filepath = params["arguments"].toObject()["filepath"].toString();
+            
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getGraphingWindow()) {
+                MainWindow::getReference()->showGraphingWindow();
+            }
+            if (MainWindow::getReference()->getGraphingWindow()) {
+                QString res = MainWindow::getReference()->getGraphingWindow()->mcpTakeScreenshot(filepath);
+                if (!res.isEmpty()) {
+                    resultData["filepath"] = res;
+                    resultData["success"] = true;
+                } else {
+                    resultData["error"] = "Failed to take screenshot";
+                }
+            } else {
+                resultData["error"] = "Graphing window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "start_playback") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->showPlaybackWindow();
+            }
+            if (MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->getPlaybackWindow()->mcpPlaybackPlay();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Playback window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "pause_playback") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->showPlaybackWindow();
+            }
+            if (MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->getPlaybackWindow()->mcpPlaybackPause();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Playback window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "stop_playback") {
+            QJsonObject resultData;
+            if (!MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->showPlaybackWindow();
+            }
+            if (MainWindow::getReference()->getPlaybackWindow()) {
+                MainWindow::getReference()->getPlaybackWindow()->mcpPlaybackStop();
+                resultData["success"] = true;
+            } else {
+                resultData["error"] = "Playback window not open or unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "connect_bus") {
+            int type = params["arguments"].toObject().contains("type") ? params["arguments"].toObject()["type"].toInt() : 0;
+            QString portName = params["arguments"].toObject().contains("portName") ? params["arguments"].toObject()["portName"].toString() : "";
+            QString driverName = params["arguments"].toObject().contains("driverName") ? params["arguments"].toObject()["driverName"].toString() : "";
+            int serialSpeed = params["arguments"].toObject().contains("serialSpeed") ? params["arguments"].toObject()["serialSpeed"].toInt() : 0;
+            int busSpeed = params["arguments"].toObject().contains("busSpeed") ? params["arguments"].toObject()["busSpeed"].toInt() : 0;
+            bool isCanFd = params["arguments"].toObject().contains("isCanFd") ? params["arguments"].toObject()["isCanFd"].toBool() : false;
+            int dataRate = params["arguments"].toObject().contains("dataRate") ? params["arguments"].toObject()["dataRate"].toInt() : 0;
+            
+            QJsonObject resultData;
+            if (MainWindow::getReference()->getConnectionWindow()) {
+                if (MainWindow::getReference()->getConnectionWindow()->mcpConnectBus(type, portName, driverName, serialSpeed, busSpeed, isCanFd, dataRate)) {
+                    resultData["success"] = true;
+                } else {
+                    resultData["error"] = "Failed to create connection";
+                }
+            } else {
+                resultData["error"] = "Connection window unavailable";
+            }
+            
+            QJsonObject item;
+            item["type"] = "text";
+            item["text"] = QString::fromUtf8(QJsonDocument(resultData).toJson(QJsonDocument::Indented));
+            content.append(item);
+            
+        } else if (toolName == "disconnect_bus") {
+            int index = params["arguments"].toObject()["index"].toInt();
+            
+            QJsonObject resultData;
+            if (MainWindow::getReference()->getConnectionWindow()) {
+                if (MainWindow::getReference()->getConnectionWindow()->mcpDisconnectBus(index)) {
+                    resultData["success"] = true;
+                } else {
+                    resultData["error"] = "Failed to disconnect, invalid index?";
+                }
+            } else {
+                resultData["error"] = "Connection window unavailable";
             }
             
             QJsonObject item;

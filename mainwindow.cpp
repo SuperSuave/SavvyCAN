@@ -2013,6 +2013,16 @@ SignalViewerWindow* MainWindow::getSignalViewerWindow() const
     return signalViewerWindow;
 }
 
+FramePlaybackWindow* MainWindow::getPlaybackWindow() const
+{
+    return playbackWindow;
+}
+
+ConnectionWindow* MainWindow::getConnectionWindow() const
+{
+    return connectionWindow;
+}
+
 GraphingWindow* MainWindow::getGraphingWindow() const
 {
     return lastGraphingWindow;
