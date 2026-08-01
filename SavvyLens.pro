@@ -91,6 +91,9 @@ SOURCES += main.cpp\
     re/isotp_interpreterwindow.cpp \
     re/rangestatewindow.cpp \
     re/udsscanwindow.cpp \
+    re/controlanalysisdialog.cpp \
+    re/controlcandidatemodel.cpp \
+    re/controlstatedetector.cpp \
     connections/canbus.cpp \
     connections/canconnectionmodel.cpp \
     connections/connectionwindow.cpp \
@@ -115,6 +118,7 @@ SOURCES += main.cpp\
     mcp/mcptools_list.cpp \
     mcp/mcptools_call.cpp
 
+    re/bookmarkeventanalyzer.cpp
 
 HEADERS  += mainwindow.h \
     utils/logger.h \
@@ -194,6 +198,9 @@ HEADERS  += mainwindow.h \
     re/isotp_interpreterwindow.h \
     re/rangestatewindow.h \
     re/udsscanwindow.h \
+    re/controlanalysisdialog.h \
+    re/controlcandidatemodel.h \
+    re/controlstatedetector.h \
     connections/canbus.h \
     connections/canconnectionmodel.h \
     connections/connectionwindow.h \
@@ -217,6 +224,7 @@ HEADERS  += mainwindow.h \
     pcaplite.h \
     mcp/mcpserver.h
 
+    re/bookmarkeventanalyzer.h
 
 FORMS    += ui/candatagrid.ui \
     triggerdialog.ui \

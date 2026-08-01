@@ -47,6 +47,8 @@
 #include "canbridgewindow.h"
 #include "bookmarkmanager.h"
 #include "bookmarkmanagerdialog.h"
+#include "re/bookmarkeventanalyzer.h"
+#include "re/controlanalysisdialog.h"
 
 class CANConnection;
 class ConnectionWindow;
@@ -54,23 +56,15 @@ class ISOTP_InterpreterWindow;
 class ScriptingWindow;
 class BookmarkManager;
 class BookmarkManagerDialog;
+class BookmarkEventAnalyzer;
+class ControlStateDetector;
+class ControlCandidateModel;
+class ControlAnalysisDialog;
 class QDockWidget;
 class QLabel;
 class QPlainTextEdit;
 class QGroupBox;
 class QWidget;
-
-enum SIMP_COL
-{
-    SC_COL_EN = 0,
-    SC_COL_BUS = 1,
-    SC_COL_ID = 2,
-    SC_COL_EXT = 3,
-    SC_COL_REM = 4,
-    SC_COL_DATA = 5,
-    SC_COL_INTERVAL = 6,
-    SC_COL_COUNT = 7,
-};
 
 namespace Ui {
 class MainWindow;
@@ -147,19 +141,30 @@ public slots:
     void filterClearAll();
     void headerClicked (int logicalIndex);
     void DBCSettingsUpdated();
-    void onSenderCellChanged(int, int);
     void showBookmarksWindow();
 
     /// Suggested by AI
     void deleteBookmarkByIndex(int bookmarkIndex);
     void jumpToBookmark(int bookmarkIndex);
-    void jumpToOriginalIndex();
+    void jumpToOriginalIndex(int originalIndex);
     void copyOriginalIndex();
     void filterFrameFilterList(const QString &text);
     void setAutoBookmarkNewIdsActive(bool enabled);
     void autoBookmarkTimeoutExpired();
     void triggerTimedDiscoveryBookmark();
     void analyzeCurrentBookmarkOrSelection();
+    void analyzeControlStatesForLoadedLog();
+    void analyzeControlStatesForSelectedFrame();
+    void showControlAnalysisWindow();
+    void jumpToControlCandidate(int candidateIndex);
+    void bookmarkControlCandidate(int candidateIndex);
+    void updateEmbeddedControlDetailsForCurrentRow(const QModelIndex &current, const QModelIndex &previous);
+    void jumpToSelectedEmbeddedControlCandidate();
+    void bookmarkSelectedEmbeddedControlCandidate();
+
+    void jumpToSelectedEventCorrelationCandidate();
+    void bookmarkSelectedEventCorrelationCandidate();
+    void refreshAnalysisTabsForCurrentSelection();
 
 public slots:
     void analyzeFrameData(QString frameId);
@@ -215,7 +220,6 @@ private:
     bool CSVAbsTime;
     bool bDirty; //have frames been added or subtracted since the last save/load?
     bool useFiltered; //should sub-windows use the unfiltered or filtered frames list?
-    bool inhibitSenderChanged;
 
     bool continuousLogging;
     int continuousLogFlushCounter;
@@ -263,6 +267,10 @@ private:
     //bookmarking -- Helped by AI
     BookmarkManager *bookmarkManager;
     BookmarkManagerDialog *bookmarkDialog;
+    BookmarkEventAnalyzer *bookmarkEventAnalyzer = nullptr;
+    ControlStateDetector *controlStateDetector = nullptr;
+    ControlCandidateModel *controlCandidateModel = nullptr;
+    ControlAnalysisDialog *controlAnalysisDialog = nullptr;
 
     QString quickBookmarkLabel = "Bookmark";
     QString quickBookmarkAlternateLabel = "Alternate Bookmark";
@@ -288,193 +296,27 @@ private:
     QTimer *autoBookmarkTimer = nullptr;
     int autoBookmarkDurationMs = 2000;
 
-    QString describeFlipStrength(double score) const;
-    QString describeIdleNoise(double idleNoise) const;
+    BookmarkEventAnalyzer::BookmarkAnalysisResult analyzeBookmarkEvent(
+            int originalIndex,
+            int sameIdRadius,
+            int crossIdWindowBefore,
+            int crossIdWindowAfter) const;
 
-    struct FrameKey
-    {
-        int bus = -1;
-        uint32_t frameId = 0;
-        bool extended = false;
+    bool resolveFrameByOriginalIndex(int originalIndex, CANFrame &outFrame) const;
+    bool bookmarkFrameByOriginalIndex(int originalIndex, const QString &label, const QString &note);
 
-        bool operator==(const FrameKey &other) const
-        {
-            return bus == other.bus &&
-                   frameId == other.frameId &&
-                   extended == other.extended;
-        }
-    };
+    void showBookmarkAnalysisDialog(
+            const BookmarkEventAnalyzer::BookmarkAnalysisResult &result);
+    void jumpToAnalysisFrameKey(
+            const BookmarkEventAnalyzer::FrameKey &key);
+    void jumpToAnalysisFrameIndex(int originalIndex);
+    void graphAnalysisFrameKey(
+            const BookmarkEventAnalyzer::FrameKey &key);
+    void graphFrameByOriginalIndex(int originalIndex);
 
-    friend inline uint qHash(const FrameKey &key, uint seed = 0)
-    {
-        seed = qHash(key.bus, seed);
-        seed = qHash(key.frameId, seed);
-        seed = qHash(key.extended, seed);
-        return seed;
-    }
+    BookmarkEventAnalyzer::BookmarkAnalysisResult lastBookmarkAnalysisResult;
 
-    struct EventByteStats
-    {
-        bool hasBeforeValue = false;
-        bool hasAfterValue = false;
-        quint8 beforeValue = 0;
-        quint8 afterValue = 0;
-        int beforeCount = 0;
-        int afterCount = 0;
-
-        int beforeTransitions = 0;
-        int afterTransitions = 0;
-        int crossTransitions = 0;
-
-        quint8 lastBeforeSeen = 0;
-        quint8 lastAfterSeen = 0;
-        bool hasLastBeforeSeen = false;
-        bool hasLastAfterSeen = false;
-    };
-
-    struct ByteIdleStats
-    {
-        int samples = 0;
-        int changes = 0;
-        quint8 lastValue = 0;
-        bool hasLastValue = false;
-    };
-
-    struct FrameIdleStats
-    {
-        int totalFrames = 0;
-        int maxDlcSeen = 0;
-        std::array<ByteIdleStats, 64> bytes;
-    };
-
-    struct EventFrameStats
-    {
-        FrameKey key;
-        int matchedFramesBefore = 0;
-        int matchedFramesAfter = 0;
-        std::array<EventByteStats, 64> bytes;
-
-        int nearestOriginalIndex = -1;
-        int nearestDistance = std::numeric_limits<int>::max();
-    };
-
-    struct FlipCandidate
-    {
-        FrameKey key;
-        int byteIndex = -1;
-        quint8 beforeValue = 0;
-        quint8 afterValue = 0;
-
-        int beforeCount = 0;
-        int afterCount = 0;
-        int eventFlipCount = 0;
-
-        int nearestOriginalIndex = -1;
-        int nearestDistance = std::numeric_limits<int>::max();
-
-        double supportScore = 0.0;
-        double localNoise = 0.0;
-        double localStability = 0.0;
-        double idleNoise = 0.0;
-        double idleStability = 0.0;
-
-        double score = 0.0;
-    };
-
-    struct CrossIdCandidate
-    {
-        FrameKey key;
-        int beforeCount = 0;
-        int afterCount = 0;
-        int totalEventCount = 0;
-
-        int payloadChangeCount = 0;
-
-        double appearanceShift = 0.0;
-        double payloadVolatility = 0.0;
-        double idleNoise = 0.0;
-        double idleStability = 0.0;
-
-        bool appearedOnlyAfter = false;
-        bool disappearedAfter = false;
-
-        double score = 0.0;
-
-        int nearestOriginalIndex = -1;
-        int nearestDistance = std::numeric_limits<int>::max();
-    };
-    
-    struct BookmarkAnalysisResult
-    {
-        CANFrame anchorFrame;
-        int originalIndex = -1;
-
-        int sameIdRadius = 0;
-        int crossIdWindowBefore = 0;
-        int crossIdWindowAfter = 0;
-
-        QVector<FlipCandidate> sameIdCandidates;
-        QVector<CrossIdCandidate> crossIdCandidates;
-
-    };
-
-
-
-    struct CrossIdEventStats
-    {
-        FrameKey key;
-        int beforeCount = 0;
-        int afterCount = 0;
-
-        bool hasLastBefore = false;
-        bool hasLastAfter = false;
-        QByteArray lastBeforePayload;
-        QByteArray lastAfterPayload;
-
-        int beforePayloadTransitions = 0;
-        int afterPayloadTransitions = 0;
-
-        int anchorOriginalIndex = -1;
-        int nearestOriginalIndex = -1;
-        int nearestDistance = std::numeric_limits<int>::max();
-    };
-
-    struct SameIdScoreFeatures
-    {
-        double eventDelta = 0.0;
-        double supportScore = 0.0;
-        double localStability = 0.0;
-        double idleStability = 0.0;
-        double windowConfidence = 0.0;
-    };
-
-    struct CrossIdScoreFeatures
-    {
-        double appearanceShift = 0.0;
-        double postEventPersistence = 0.0;
-        double exclusiveAfter = 0.0;
-        double exclusiveBefore = 0.0;
-        double payloadVolatility = 0.0;
-        double idleStability = 0.0;
-    };
-
-    FrameKey makeFrameKey(const CANFrame &frame) const;
-    BookmarkAnalysisResult analyzeBookmarkEvent(int originalIndex, int sameIdRadius, int crossIdWindowBefore, int crossIdWindowAfter) const;
-
-    QVector<FlipCandidate> analyzeSameIdAroundBookmark(const QVector<CANFrame> &frames, int originalIndex, int sameIdRadius) const;
-
-    QVector<CrossIdCandidate> analyzeCrossIdAroundBookmark(const QVector<CANFrame> &frames, int originalIndex, int windowBefore, int windowAfter) const;
-
-    void accumulateCrossIdEventFrame(CrossIdEventStats &stats, const CANFrame &frame, bool isBeforeSide) const;
-    void accumulateEventFrame(EventFrameStats &stats, const CANFrame &frame, bool isBeforeSide, int anchorOriginalIndex) const;
-    QVector<FlipCandidate> rankFlipCandidates(const QHash<FrameKey, EventFrameStats> &eventStats, int sameIdRadius) const;
-
-    // Optional future enhancement: live or offline-learned idle baseline.
-    // Not required, but leaving the state hook here makes later extension easy.
-    QHash<FrameKey, FrameIdleStats> idleBaseline;
-    bool idleBaselineAvailable = false;
-
-    // byteinspector -- Helped by AI
+    // byteinspector
     QDockWidget *inspectDock = nullptr;
     QWidget *inspectPaneWidget = nullptr;
     QSortFilterProxyModel *proxyModel = nullptr;
@@ -489,35 +331,16 @@ private:
     QVector<int> findSameIdNeighborRows(const QModelIndex &sourceIndex, int radius) const;
     bool findPreviousFrameWithSameId(const QModelIndex &sourceIndex, CANFrame &outFrame) const;
 
-    static double clamp01(double value);
-    static double safeRatio(double num, double denom);
+    void setupEmbeddedAnalysisViews();
+    void refreshEmbeddedControlAnalysis();
+    void refreshEmbeddedEventCorrelation(
+            const BookmarkEventAnalyzer::BookmarkAnalysisResult &result);
+    void clearEmbeddedEventCorrelation();
+    void updateEmbeddedControlDetailsTextForRow(int row);
+    int currentEventCorrelationCandidateIndex() const;
 
-    SameIdScoreFeatures buildSameIdScoreFeatures(const EventByteStats &eb, const ByteIdleStats *idleByteStats, int sameIdRadius) const;
-
-    CrossIdScoreFeatures buildCrossIdScoreFeatures(const CrossIdEventStats &stats, const FrameIdleStats *idleStats, int windowBefore, int windowAfter) const;
-
-    double scoreSameIdCandidate(const SameIdScoreFeatures &f) const;
-    double scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const;
-    double computeSameIdSupportScore(const EventByteStats& stats, int sameIdRadius) const;
-    double computeSameIdLocalStability(const EventByteStats& stats) const;
-    double computeSameIdIdleStability(const ByteIdleStats* idleStats) const;
-    double scoreSameIdCandidate(const EventByteStats& stats, const ByteIdleStats* idleStats, int sameIdRadius) const;
-
-    double computeCrossIdAppearanceShift(const CrossIdEventStats& stats, int windowBefore, int windowAfter) const;
-    double computeCrossIdPayloadVolatility(const CrossIdEventStats& stats) const;
-    double computeCrossIdIdleStability(const FrameIdleStats* idleStats) const;
-    double scoreCrossIdCandidate(const CrossIdEventStats& stats, const FrameIdleStats* idleStats, int windowBefore, int windowAfter) const;
-
-    void showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result);
-    void jumpToAnalysisFrameKey(const FrameKey &key);
-    void jumpToAnalysisFrameIndex(int originalIndex);
-    void graphAnalysisFrameKey(const FrameKey &key);
-    void graphAnalysisOriginalIndex(int originalIndex);
-
-
-
-    QString describeSameIdReason(const FlipCandidate &c) const;
-    QString describeCrossIdReason(const CrossIdCandidate &c) const;
+    QString describeFlipStrength(double score) const;
+    QString describeIdleNoise(double idleNoise) const;
 
 
     //private methods
@@ -542,6 +365,8 @@ private slots:
     bool eventFilter(QObject *obj, QEvent *event);
     void manageRowExpansion();
     void disableAutoRowExpansion();
+    int64_t selectedFrameTimestamp();
+    void scrollToNearestTimestamp(int64_t timestamp);
     void createSenderRow();
     void processSenderCellChange(int line, int col);
 };

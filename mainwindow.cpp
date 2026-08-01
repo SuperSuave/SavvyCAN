@@ -2,7 +2,15 @@
 #include "ui_mainwindow.h"
 #include "bookmarkmanager.h"
 #include "bookmarkmanagerdialog.h"
+#include "re/controlanalysisdialog.h"
+#include "re/controlcandidatemodel.h"
+#include "re/controlstatedetector.h"
+#include "re/bookmarkeventanalyzer.h"
 #include "can_structs.h"
+#include <limits>
+#include <QHeaderView>
+#include <QItemSelectionModel>
+#include <QTableWidgetItem>
 #include <QClipboard>
 #include <QShortcut>
 #include <QDateTime>
@@ -24,6 +32,8 @@
 #include "framebytedatadelegate.h"
 
 
+#include <QSortFilterProxyModel>
+#include <limits>
 /*
 Some notes on things I'd like to put into the program but haven't put on github (yet)
 
@@ -92,7 +102,19 @@ MainWindow::MainWindow(QWidget *parent) :
     autoBookmarkTimer->setSingleShot(true);
     connect(autoBookmarkTimer, &QTimer::timeout, this, &MainWindow::autoBookmarkTimeoutExpired);
 
-#if QT_VERSION < QT_VERSION_CHECK( 6, 0, 0 )
+    controlStateDetector = new ControlStateDetector(this);
+    controlCandidateModel = new ControlCandidateModel(this);
+    controlAnalysisDialog = new ControlAnalysisDialog(this);
+    controlAnalysisDialog->setModel(controlCandidateModel);
+
+    connect(controlAnalysisDialog, &ControlAnalysisDialog::jumpToCandidateRequested,
+            this, &MainWindow::jumpToControlCandidate);
+    connect(controlAnalysisDialog, &ControlAnalysisDialog::bookmarkCandidateRequested,
+            this, &MainWindow::bookmarkControlCandidate);
+
+    setupEmbeddedAnalysisViews();
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     qRegisterMetaTypeStreamOperators<QVector<QString>>();
     qRegisterMetaTypeStreamOperators<QVector<int>>();
 #endif
@@ -101,17 +123,24 @@ MainWindow::MainWindow(QWidget *parent) :
     useColorsByCanId = false;
     selfRef = this;
 
-    this->setWindowTitle("SavvyLens  " + QByteArray(VERSION));
+    this->setWindowTitle("SavvyLens " + QByteArray(VERSION));
 
-    model = new CANFrameModel(this); // set parent to mainwindow to prevent canframemodel to change thread (might be done by setModel but just in case)
+    model = new CANFrameModel(this);
 
     proxyModel = new QSortFilterProxyModel(this);
     proxyModel->setSourceModel(model);
     ui->canFramesView->setModel(proxyModel);
 
-    ui->canFramesView->setItemDelegateForColumn(int(Column::Data), new FrameByteDataDelegate(ui->canFramesView));
+    ui->canFramesView->setItemDelegateForColumn(int(Column::Data),
+                                                new FrameByteDataDelegate(ui->canFramesView));
 
-    connect(ui->canFramesView->selectionModel(), &QItemSelectionModel::currentRowChanged, this, &MainWindow::updateInspectDock);
+    connect(ui->canFramesView->selectionModel(), &QItemSelectionModel::currentRowChanged,
+            this, &MainWindow::updateInspectDock);
+
+    connect(ui->canFramesView->selectionModel(), &QItemSelectionModel::currentRowChanged,
+            this, [this](const QModelIndex &, const QModelIndex &) {
+                refreshAnalysisTabsForCurrentSelection();
+            });
 
     bookmarkManager = new BookmarkManager(this);
     bookmarkDialog = new BookmarkManagerDialog(bookmarkManager, this);
@@ -120,12 +149,9 @@ MainWindow::MainWindow(QWidget *parent) :
 
     connect(analyzeBookmarkAction, &QAction::triggered, this, &MainWindow::analyzeCurrentBookmarkOrSelection);
 
-    if (ui->menu_RE_Tools)
-    {
-        ui->menu_RE_Tools->addSeparator();
-        ui->menu_RE_Tools->addAction(analyzeBookmarkAction);
-    }
-
+    QAction *analyzeControlLoadedAction = new QAction(tr("Analyze Control States (Loaded Log)"), this);
+    QAction *analyzeControlSelectedAction = new QAction(tr("Analyze Control States (Selected Frame)"), this);
+    bookmarkEventAnalyzer = new BookmarkEventAnalyzer(this);      
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
 
@@ -252,7 +278,10 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->btnExpandAll, &QAbstractButton::clicked, this, &MainWindow::expandAllRows);
     connect(ui->btnCollapseAll, &QAbstractButton::clicked, this, &MainWindow::collapseAllRows);
 
-    connect(ui->tableSimpleSender, SIGNAL(cellChanged(int,int)), this, SLOT(onSenderCellChanged(int,int)));
+    connect(ui->analyzeControlLoadedAction, &QAction::triggered,
+            this, &MainWindow::analyzeControlStatesForLoadedLog);
+    connect(ui->analyzeControlSelectedAction, &QAction::triggered,
+            this, &MainWindow::analyzeControlStatesForSelectedFrame);
 
     // Bookmark Connectors
     connect(bookmarkDialog, &BookmarkManagerDialog::jumpToBookmarkRequested,
@@ -333,27 +362,6 @@ MainWindow::MainWindow(QWidget *parent) :
     ui->actionMotorControlConfig->setVisible(false);
     ui->actionSingle_Multi_State_2->setVisible(false);
 
-    QStringList headers;
-    headers << "En" << "Bus" << "ID" << "Ext" << "Rem" << "Data"
-            << "Interval" << "Count";
-    ui->tableSimpleSender->setColumnCount(8);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_EN, 70);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_BUS, 70);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_ID, 70);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_EXT, 70);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_REM, 70);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_DATA, 300);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_INTERVAL, 100);
-    ui->tableSimpleSender->setColumnWidth(SIMP_COL::SC_COL_COUNT, 100);
-    ui->tableSimpleSender->setHorizontalHeaderLabels(headers);
-
-    createSenderRow();
-
-    frameSender = new FrameSenderObject(model->getListReference());
-
-    frameSender->initialize(); //creates the thread and sets things up
-    frameSender->startSending(); //start the timer in the object so enabled things can send
-
     installEventFilter(this);
 
 }
@@ -361,7 +369,6 @@ MainWindow::MainWindow(QWidget *parent) :
 MainWindow::~MainWindow()
 {
     updateTimer.stop();
-    frameSender->stopSending();
     killEmAll(); //Ride the lightning
     delete ui;
     delete model;
@@ -454,22 +461,32 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::getSelectedFrameInfo(CANFrame &outFrame, QModelIndex *outIndex)
 {
-    if (!ui || !ui->canFramesView) return false;
+    if (!ui || !ui->canFramesView || !model)
+        return false;
 
-    QModelIndex proxyIndex = ui->canFramesView->currentIndex();
-    if (!proxyIndex.isValid()) return false;
+    const QModelIndex proxyIndex = ui->canFramesView->currentIndex();
+    if (!proxyIndex.isValid())
+        return false;
 
     auto proxy = qobject_cast<QSortFilterProxyModel *>(ui->canFramesView->model());
-    if (!proxy) return false;
+    if (!proxy)
+        return false;
 
-    QModelIndex sourceIndex = proxy->mapToSource(proxyIndex);
-    if (!sourceIndex.isValid()) return false;
+    const QModelIndex sourceIndex = proxy->mapToSource(proxyIndex);
+    if (!sourceIndex.isValid())
+        return false;
 
-    const CANFrame *frame = model->getFilteredFrameRef(sourceIndex.row());
-    if (!frame) return false;
+    const QVector<CANFrame> *allFrames = model->getListReference();
+    if (!allFrames)
+        return false;
 
-    outFrame = *frame;
-    if (outIndex) *outIndex = sourceIndex;
+    const int row = sourceIndex.row();
+    if (row < 0 || row >= allFrames->size())
+        return false;
+
+    outFrame = allFrames->at(row);
+    if (outIndex)
+        *outIndex = sourceIndex;
     return true;
 }
 
@@ -511,12 +528,12 @@ void MainWindow::readSettings()
 
 if (settings.value("Main/SaveRestorePositions", false).toBool())
 {
-    resize(settings.value("Main/WindowSize", QSize(800, 750)).toSize());
+    resize(settings.value("Main/WindowSize", QSize(910, 800)).toSize());
     move(Utility::constrainedWindowPos(
         settings.value("Main/WindowPos", QPoint(100, 100)).toPoint()));
 
     ui->canFramesView->setColumnWidth(int(Column::TimeStamp),
-        settings.value("Main/TimeColumn", 150).toUInt());
+        settings.value("Main/TimeColumn", 125).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::FrameId),
         settings.value("Main/IDColumn", 70).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::Extended),
@@ -532,24 +549,24 @@ if (settings.value("Main/SaveRestorePositions", false).toBool())
     ui->canFramesView->setColumnWidth(int(Column::ASCII),
         settings.value("Main/AsciiColumn", 50).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::Data),
-        settings.value("Main/DataColumn", 100).toUInt());
+        settings.value("Main/DataColumn", 125).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::Idx),
         settings.value("Main/OGIDColumn", 90).toUInt());
 }
 else
 {
-    resize(QSize(800, 750));
+    resize(QSize(800, 850));
     move(Utility::constrainedWindowPos(QPoint(100, 100)));
 
-    ui->canFramesView->setColumnWidth(int(Column::TimeStamp), 150);
+    ui->canFramesView->setColumnWidth(int(Column::TimeStamp), 725);
     ui->canFramesView->setColumnWidth(int(Column::FrameId), 70);
     ui->canFramesView->setColumnWidth(int(Column::Extended), 40);
     ui->canFramesView->setColumnWidth(int(Column::Remote), 40);
     ui->canFramesView->setColumnWidth(int(Column::Direction), 40);
     ui->canFramesView->setColumnWidth(int(Column::Bus), 40);
     ui->canFramesView->setColumnWidth(int(Column::Length), 40);
-    ui->canFramesView->setColumnWidth(int(Column::ASCII), 100);
-    ui->canFramesView->setColumnWidth(int(Column::Data), 175);
+    ui->canFramesView->setColumnWidth(int(Column::ASCII), 50);
+    ui->canFramesView->setColumnWidth(int(Column::Data), 125);
     ui->canFramesView->setColumnWidth(int(Column::Idx), 90);
 }
 
@@ -618,9 +635,9 @@ void MainWindow::readUpdateableSettings()
     CSVAbsTime = settings.value("Main/CSVAbsTime", false).toBool();
 
     if (settings.value("Main/FilterLabeling", false).toBool())
-        ui->listFilters->setMaximumWidth(250);
+        ui->listFilters->setMaximumWidth(100);
     else
-        ui->listFilters->setMaximumWidth(175);
+        ui->listFilters->setMaximumWidth(100);
     updateFilterList();    
 }    
 
@@ -657,170 +674,6 @@ void MainWindow::writeSettings()
         ui->canFramesView->columnWidth(int(Column::Idx)));
 }
 
-void MainWindow::onSenderCellChanged(int row, int col)
-{
-    if (inhibitSenderChanged) return;
-    qDebug() << "onCellChanged";
-    if (row == ui->tableSimpleSender->rowCount() - 1)
-    {
-        createSenderRow();
-    }
-
-    processSenderCellChange(row, col);
-}
-
-void MainWindow::processSenderCellChange(int line, int col)
-{
-    qDebug() << "processSenderCellChange";
-    FrameSendData *tempData;
-    QStringList tokens;
-    int tempVal;
-
-    int numBuses = CANConManager::getInstance()->getNumBuses();
-    QByteArray arr;
-
-    tempData = frameSender->getSendRecordRef(line);
-
-    if (!tempData)
-    {
-        qDebug() << "Need to set up a new entry in senders";
-        FrameSendData dat;
-        dat.enabled = false;
-        dat.count = 0;
-        dat.frameCount = 0;
-        dat.bus = 0;
-        frameSender->addSendRecord(dat);
-        tempData = frameSender->getSendRecordRef(line);
-    }
-
-    if (!tempData)
-    {
-        qDebug() << "No data to modify in processSenderCellChange. This is a bug!";
-        return;
-    }
-
-    switch (col)
-    {
-    case SIMP_COL::SC_COL_EN: //Enable check box
-        if (ui->tableSimpleSender->item(line, 0)->checkState() == Qt::Checked)
-        {
-            tempData->enabled = true;
-        }
-        else tempData->enabled = false;
-        qDebug() << "Setting enabled to " << tempData->enabled;
-        break;
-    case SIMP_COL::SC_COL_BUS: //Bus designation
-        tempVal = Utility::ParseStringToNum(ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_BUS)->text());
-        if (tempVal < -1) tempVal = -1;
-        if (tempVal >= numBuses) tempVal = numBuses - 1;
-        tempData->bus = tempVal;
-        qDebug() << "Setting bus to " << tempVal;
-        break;
-    case SIMP_COL::SC_COL_ID: //ID field
-        tempVal = Utility::ParseStringToNum(ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_ID)->text());
-        if (tempVal < 0) tempVal = 0;
-        if (tempVal > 0x7FFFFFFF) tempVal = 0x7FFFFFFF;
-        tempData->setFrameId(tempVal);
-        if (tempData->frameId() > 0x7FF) {
-            tempData->setExtendedFrameFormat(true);
-            ui->tableSimpleSender->blockSignals(true);
-            ui->tableSimpleSender->item(line, ST_COLS::SENDTAB_COL_EXT)->setCheckState(Qt::Checked);
-            ui->tableSimpleSender->blockSignals(false);
-        }
-        qDebug() << "setting ID to " << tempVal;
-        break;
-    case SIMP_COL::SC_COL_EXT:
-        if (ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_EXT)->checkState() == Qt::Checked) {
-            tempData->setExtendedFrameFormat(true);
-        } else {
-            tempData->setExtendedFrameFormat(false);
-        }
-        break;
-    case SIMP_COL::SC_COL_REM:
-        if (ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_REM)->checkState() == Qt::Checked) {
-            tempData->setFrameType(QCanBusFrame::RemoteRequestFrame);
-        } else {
-            tempData->setFrameType(QCanBusFrame::DataFrame);
-        }
-        break;
-    case SIMP_COL::SC_COL_DATA: //Data bytes
-        for (int i = 0; i < 8; i++) tempData->payload().data()[i] = 0;
-
-#if QT_VERSION >= QT_VERSION_CHECK( 5, 14, 0 )
-        tokens = ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_DATA)->text().split(" ", Qt::SkipEmptyParts);
-#else
-        tokens = ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_DATA)->text().split(" ", QString::SkipEmptyParts);
-#endif
-        arr.clear();
-        arr.reserve(tokens.count());
-        for (int j = 0; j < tokens.count(); j++)
-        {
-            arr.append((uint8_t)Utility::ParseStringToNum(tokens[j]));
-        }
-        tempData->setPayload(arr);
-        break;
-    case SIMP_COL::SC_COL_INTERVAL: //interval in ms
-
-        QString trigger = ui->tableSimpleSender->item(line, SIMP_COL::SC_COL_INTERVAL)->text().toUpper();
-
-        Trigger thisTrigger;
-        thisTrigger.bus = -1; //-1 means we don't care which
-        thisTrigger.ID = -1; //the rest of these being -1 means nothing has changed it
-        thisTrigger.maxCount = -1;
-        thisTrigger.milliseconds = -1;
-        thisTrigger.currCount = 0;
-        thisTrigger.msCounter = 0;
-        thisTrigger.triggerMask = 0;
-        thisTrigger.readyCount = true;
-
-        tempData->triggers.clear();
-        tempData->triggers.reserve(1);
-
-        if (trigger != "")
-        {
-            thisTrigger.milliseconds = Utility::ParseStringToNum(trigger);
-            thisTrigger.triggerMask |= TriggerMask::TRG_MS;
-        }
-
-        if (thisTrigger.milliseconds < 1) thisTrigger.milliseconds = 1;
-
-        tempData->triggers.append(thisTrigger);
-
-        break;
-    }
-}
-
-void MainWindow::createSenderRow()
-{
-    int row = ui->tableSimpleSender->rowCount();
-    ui->tableSimpleSender->insertRow(row);
-
-    QTableWidgetItem *item = new QTableWidgetItem();
-    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-    item->setCheckState(Qt::Unchecked);
-    inhibitSenderChanged = true;
-    ui->tableSimpleSender->setItem(row, SIMP_COL::SC_COL_EN, item);
-
-    item = new QTableWidgetItem();
-    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-    item->setCheckState(Qt::Unchecked);
-    ui->tableSimpleSender->setItem(row, SIMP_COL::SC_COL_EXT, item);
-
-    item = new QTableWidgetItem();
-    item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-    item->setCheckState(Qt::Unchecked);
-    ui->tableSimpleSender->setItem(row, SIMP_COL::SC_COL_REM, item);
-
-    for (int i = 1; i <= SIMP_COL::SC_COL_COUNT; i++)
-    {
-        if (i != SIMP_COL::SC_COL_EXT && i != SIMP_COL::SC_COL_REM) {
-            item = new QTableWidgetItem("");
-            ui->tableSimpleSender->setItem(row, i, item);
-        }
-    }
-
-    inhibitSenderChanged = false;
-}
 
 void MainWindow::updateConnectionSettings(QString connectionType, QString port, int speed0, int speed1)
 {
@@ -868,6 +721,41 @@ void MainWindow::expandAllRows()
 
         rowExpansionActive = true;
     }
+}
+
+int64_t MainWindow::selectedFrameTimestamp()
+{
+    QModelIndex proxyIdx = ui->canFramesView->currentIndex();
+    if (!proxyIdx.isValid()) return -1;
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    int row = proxy ? proxy->mapToSource(proxyIdx).row() : proxyIdx.row();
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (row < 0 || row >= filtered->count()) return -1;
+    const CANFrame &f = filtered->at(row);
+    return f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+}
+
+void MainWindow::scrollToNearestTimestamp(int64_t timestamp)
+{
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (timestamp < 0 || filtered->isEmpty()) return;
+    int lo = 0, hi = filtered->count() - 1, best = 0;
+    int64_t bestDiff = std::numeric_limits<int64_t>::max();
+    while (lo <= hi)
+    {
+        int mid = (lo + hi) / 2;
+        const CANFrame &f = filtered->at(mid);
+        int64_t ts = f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+        int64_t diff = qAbs(ts - timestamp);
+        if (diff < bestDiff) { bestDiff = diff; best = mid; }
+        if (ts < timestamp) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    QModelIndex sourceIdx = model->index(best, 0);
+    QModelIndex viewIdx = proxy ? proxy->mapFromSource(sourceIdx) : sourceIdx;
+    ui->canFramesView->setCurrentIndex(viewIdx);
+    ui->canFramesView->scrollTo(viewIdx, QAbstractItemView::PositionAtCenter);
 }
 
 void MainWindow::manageRowExpansion()
@@ -952,6 +840,7 @@ void MainWindow::gridContextMenuRequest(QPoint pos)
 
     menu->addAction(copyAct);
     menu->addSeparator();
+    menu->addAction(tr("Analyze Control Type"), this, &MainWindow::analyzeControlStatesForSelectedFrame);
     menu->addAction(tr("Analyze Around This Frame"), this, &MainWindow::analyzeCurrentBookmarkOrSelection);
 
     if (idx.column() == 8) // DATA column
@@ -1164,30 +1053,26 @@ void MainWindow::updateFilterList()
 void MainWindow::filterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
 void MainWindow::busFilterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setBusFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -1195,14 +1080,14 @@ void MainWindow::filterSetAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Checked);
-    }
     inhibitFilterUpdate = false;
-    model->setAllFilters(true);
     if (ui->frameFilterSearch)
         ui->frameFilterSearch->clear();
 
+    int64_t savedTs = selectedFrameTimestamp();
+    model->setAllFilters(true);
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -1210,9 +1095,7 @@ void MainWindow::filterClearAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Unchecked);
-    }
     inhibitFilterUpdate = false;
     model->setAllFilters(false);
     if (ui->frameFilterSearch)
@@ -1298,18 +1181,6 @@ void MainWindow::tickGUIUpdate()
             }
         }
 
-        //refresh the count for all the frame senders
-        FrameSendData *tempData;
-        int numRows = ui->tableSimpleSender->rowCount();
-        for (int i = 0; i < numRows; i++)
-        {
-            tempData = frameSender->getSendRecordRef(i);
-            if (tempData)
-            {
-                ui->tableSimpleSender->item(i, SIMP_COL::SC_COL_COUNT)->setText(QString::number( tempData->count ));
-            }
-        }
-
         rxFrames = 0;
     //}
 }
@@ -1372,6 +1243,7 @@ void MainWindow::clearFrames()
 void MainWindow::normalizeTiming()
 {
     model->normalizeTiming();
+    model->setTimeStyle(TS_SECONDS);
     emit framesUpdated(-2); //claim an all new set of frames because every frame was updated.
 }
 
@@ -1837,11 +1709,12 @@ Data Bytes: 88 10 00 13 BB 00 06 00
 void MainWindow::toggleCapture()
 {
     allowCapture = !allowCapture;
-    if (allowCapture)
+    if (allowCapture) {
         ui->btnCaptureToggle->setText("Suspend Capturing");
-    else
+    } else {
         ui->btnCaptureToggle->setText("Restart Capturing");
         setAutoBookmarkNewIdsActive(false);
+    }
 
     emit suspendCapturing(!allowCapture);
 }
@@ -2362,13 +2235,15 @@ bool MainWindow::selectFrameByOriginalIndex(int originalIndex)
     return true;
 }
 
-void MainWindow::jumpToOriginalIndex()
+void MainWindow::jumpToOriginalIndex(int originalIndex)
 {
-    CANFrame frame;
-    QModelIndex sourceIndex;
-    if (!getSelectedFrameInfo(frame, &sourceIndex)) return;
+    if (originalIndex < 0)
+        return;
 
-    if (!selectFrameByOriginalIndex(frame.originalIndex)) return;
+    if (!selectFrameByOriginalIndex(originalIndex))
+    {
+        statusBar()->showMessage(tr("Frame could not be found or is hidden by filters"), 2500);
+    }
 }
 
 void MainWindow::copyOriginalIndex()
@@ -2562,7 +2437,7 @@ void MainWindow::processAutoBookmarks(const QVector<CANFrame> &frames)
     }
 }
 
-MainWindow::FrameKey MainWindow::makeFrameKey(const CANFrame &frame) const
+BookmarkEventAnalyzer::FrameKey BookmarkEventAnalyzer::makeFrameKey(const CANFrame &frame) const
 {
     FrameKey key;
     key.bus = frame.bus;
@@ -2571,39 +2446,7 @@ MainWindow::FrameKey MainWindow::makeFrameKey(const CANFrame &frame) const
     return key;
 }
 
-MainWindow::BookmarkAnalysisResult MainWindow::analyzeBookmarkEvent(
-        int originalIndex,
-        int sameIdRadius,
-        int crossIdWindowBefore,
-        int crossIdWindowAfter) const
-{
-    BookmarkAnalysisResult result;
-    result.originalIndex = originalIndex;
-    result.sameIdRadius = sameIdRadius;
-    result.crossIdWindowBefore = crossIdWindowBefore;
-    result.crossIdWindowAfter = crossIdWindowAfter;
-
-    if (!model) return result;
-
-    const QVector<CANFrame> *frames = model->getListReference();
-    if (!frames) return result;
-    if (originalIndex < 0 || originalIndex >= frames->size()) return result;
-
-    const CANFrame &anchor = frames->at(originalIndex);
-    result.anchorFrame = anchor;
-    if (anchor.frameType() != QCanBusFrame::DataFrame) return result;
-
-    result.sameIdCandidates =
-            analyzeSameIdAroundBookmark(*frames, originalIndex, sameIdRadius);
-
-    result.crossIdCandidates =
-            analyzeCrossIdAroundBookmark(*frames, originalIndex,
-                                         crossIdWindowBefore, crossIdWindowAfter);
-
-    return result;
-}
-
-void MainWindow::accumulateCrossIdEventFrame(
+void BookmarkEventAnalyzer::accumulateCrossIdEventFrame(
     CrossIdEventStats &stats,
     const CANFrame &frame,
     bool isBeforeSide) const
@@ -2639,15 +2482,13 @@ void MainWindow::analyzeCurrentBookmarkOrSelection()
 {
     CANFrame frame;
     QModelIndex sourceIndex;
-    if (!getSelectedFrameInfo(frame, &sourceIndex))
-    {
+    if (!getSelectedFrameInfo(frame, &sourceIndex)) {
         statusBar()->showMessage(tr("Select a frame first"), 2000);
         return;
     }
 
     const int originalIndex = frame.originalIndex;
-    if (originalIndex < 0)
-    {
+    if (originalIndex < 0) {
         statusBar()->showMessage(tr("Invalid original frame index"), 2000);
         return;
     }
@@ -2686,19 +2527,13 @@ void MainWindow::analyzeCurrentBookmarkOrSelection()
     crossAfterSpin->setToolTip(tr("How many nearby raw frames to inspect after the event for other IDs."));
 
     form->addRow(tr("Same-ID radius:"), sameIdSpin);
-    form->addRow(tr("Cross-ID before:"), crossBeforeSpin);
-    form->addRow(tr("Cross-ID after:"), crossAfterSpin);
+    form->addRow(tr("Cross-ID frames before:"), crossBeforeSpin);
+    form->addRow(tr("Cross-ID frames after:"), crossAfterSpin);
 
     mainLayout->addLayout(form);
 
-    QLabel *note = new QLabel(
-        tr("Suggested starting point: Same-ID radius 5, Cross-ID before/after 300."),
-        &dlg);
-    note->setWordWrap(true);
-    mainLayout->addWidget(note);
-
-    QDialogButtonBox *buttons = new QDialogButtonBox(
-        QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    QDialogButtonBox *buttons =
+        new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
     connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
     mainLayout->addWidget(buttons);
@@ -2714,19 +2549,71 @@ void MainWindow::analyzeCurrentBookmarkOrSelection()
     settings.setValue("Analysis/CrossIdWindowBefore", crossIdBefore);
     settings.setValue("Analysis/CrossIdWindowAfter", crossIdAfter);
 
-    const BookmarkAnalysisResult result =
+    const BookmarkEventAnalyzer::BookmarkAnalysisResult result =
         analyzeBookmarkEvent(originalIndex, sameIdRadius, crossIdBefore, crossIdAfter);
 
-    if (result.sameIdCandidates.isEmpty() && result.crossIdCandidates.isEmpty())
-    {
+    if (result.sameIdCandidates.isEmpty() && result.crossIdCandidates.isEmpty()) {
         statusBar()->showMessage(tr("No analysis results found around this frame"), 2500);
+        clearEmbeddedEventCorrelation();
         return;
     }
 
-    showBookmarkAnalysisDialog(result);
+    refreshEmbeddedEventCorrelation(result);
 }
 
-QVector<MainWindow::CrossIdCandidate> MainWindow::analyzeCrossIdAroundBookmark(
+BookmarkEventAnalyzer::BookmarkAnalysisResult MainWindow::analyzeBookmarkEvent(
+        int originalIndex,
+        int sameIdRadius,
+        int crossIdWindowBefore,
+        int crossIdWindowAfter) const
+{
+    BookmarkEventAnalyzer::BookmarkAnalysisResult result;
+    if (!model || !bookmarkEventAnalyzer) return result;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames) return result;
+
+    return bookmarkEventAnalyzer->analyze(*frames,
+                                          originalIndex,
+                                          sameIdRadius,
+                                          crossIdWindowBefore,
+                                          crossIdWindowAfter);
+}
+
+uint qHash(const BookmarkEventAnalyzer::FrameKey &key, uint seed) noexcept
+{
+    seed = ::qHash(key.frameId, seed);
+    seed = ::qHash(key.bus, seed);
+    seed = ::qHash(key.extended, seed);
+    return seed;
+}
+
+BookmarkEventAnalyzer::BookmarkAnalysisResult BookmarkEventAnalyzer::analyze(
+        const QVector<CANFrame> &frames,
+        int originalIndex,
+        int sameIdRadius,
+        int crossIdWindowBefore,
+        int crossIdWindowAfter) const
+{
+    BookmarkAnalysisResult result;
+
+    if (originalIndex < 0 || originalIndex >= frames.size())
+        return result;
+
+    result.anchorFrame = frames[originalIndex];
+    result.originalIndex = originalIndex;
+    result.sameIdRadius = sameIdRadius;
+    result.crossIdWindowBefore = crossIdWindowBefore;
+    result.crossIdWindowAfter = crossIdWindowAfter;
+
+    result.sameIdCandidates = analyzeSameIdAroundBookmark(frames, originalIndex, sameIdRadius);
+    result.crossIdCandidates = analyzeCrossIdAroundBookmark(
+            frames, originalIndex, crossIdWindowBefore, crossIdWindowAfter);
+
+    return result;
+}
+
+QVector<BookmarkEventAnalyzer::CrossIdCandidate> BookmarkEventAnalyzer::analyzeCrossIdAroundBookmark(
     const QVector<CANFrame> &frames,
     int originalIndex,
     int windowBefore,
@@ -2843,6 +2730,195 @@ QVector<MainWindow::CrossIdCandidate> MainWindow::analyzeCrossIdAroundBookmark(
     return out;
 }
 
+void MainWindow::analyzeControlStatesForLoadedLog()
+{
+    if (!controlStateDetector || !controlCandidateModel || !model)
+        return;
+
+    const QVector<CANFrame> *frames = useFiltered
+        ? model->getFilteredListReference()
+        : model->getListReference();
+
+    if (!frames || frames->isEmpty()) {
+        statusBar()->showMessage(tr("No frames loaded"), 2000);
+        return;
+    }
+
+    controlCandidateModel->setCandidates(controlStateDetector->analyzeAll(*frames));
+    refreshEmbeddedControlAnalysis();
+
+    if (ui->tabAnalysis && ui->tabControlStates)
+        ui->tabAnalysis->setCurrentWidget(ui->tabControlStates);
+
+    statusBar()->showMessage(
+        tr("Loaded %1 control-state candidates").arg(controlCandidateModel->rowCount()),
+        2500);
+}
+
+void MainWindow::analyzeControlStatesForSelectedFrame()
+{
+    if (!controlStateDetector || !controlCandidateModel || !model || !ui || !ui->canFramesView) {
+        return;
+    }
+
+    const QModelIndex currentIndex = ui->canFramesView->currentIndex();
+    if (!currentIndex.isValid()) {
+        statusBar()->showMessage(tr("Select a frame first"), 2000);
+        return;
+    }
+
+    QAbstractItemModel *viewModel = ui->canFramesView->model();
+    if (!viewModel) {
+        statusBar()->showMessage(tr("No frame model available"), 2000);
+        return;
+    }
+
+    const int frameIdCol = static_cast<int>(Column::FrameId);
+    const int busCol = static_cast<int>(Column::Bus);
+    const int extendedCol = static_cast<int>(Column::Extended);
+
+    const QModelIndex frameIdIndex = currentIndex.sibling(currentIndex.row(), frameIdCol);
+    if (!frameIdIndex.isValid()) {
+        statusBar()->showMessage(tr("Could not read Frame ID from selected row"), 2000);
+        return;
+    }
+
+    bool ok = false;
+    QString frameIdText = viewModel->data(frameIdIndex, Qt::DisplayRole).toString().trimmed();
+    frameIdText.remove(QLatin1Char(' '));
+    if (frameIdText.startsWith(QStringLiteral("0x"), Qt::CaseInsensitive)) {
+        frameIdText.remove(0, 2);
+    }
+
+    const uint32_t frameId = frameIdText.toUInt(&ok, 16);
+    if (!ok) {
+        statusBar()->showMessage(
+            tr("Selected row does not contain a valid hexadecimal Frame ID"),
+            2500);
+        return;
+    }
+
+    uint32_t bus = 0;
+    const QModelIndex busIndex = currentIndex.sibling(currentIndex.row(), busCol);
+    if (busIndex.isValid()) {
+        bool busOk = false;
+        const QString busText = viewModel->data(busIndex, Qt::DisplayRole).toString().trimmed();
+        const uint32_t parsedBus = busText.toUInt(&busOk, 10);
+        if (busOk) {
+            bus = parsedBus;
+        }
+    }
+
+    bool extended = false;
+    const QModelIndex extendedIndex = currentIndex.sibling(currentIndex.row(), extendedCol);
+    if (extendedIndex.isValid()) {
+        const QVariant extValue = viewModel->data(extendedIndex, Qt::DisplayRole);
+        if (extValue.userType() == QMetaType::Bool) {
+            extended = extValue.toBool();
+        } else {
+            const QString extText = extValue.toString().trimmed().toLower();
+            extended = (extText == QStringLiteral("1") ||
+                        extText == QStringLiteral("true") ||
+                        extText == QStringLiteral("yes") ||
+                        extText == QStringLiteral("ext") ||
+                        extText == QStringLiteral("extended"));
+        }
+    }
+
+    const QVector<CANFrame> *frames = useFiltered
+        ? model->getFilteredListReference()
+        : model->getListReference();
+
+    if (!frames || frames->isEmpty()) {
+        statusBar()->showMessage(tr("No frames loaded"), 2000);
+        return;
+    }
+
+    ControlStateKey selectedKey;
+    selectedKey.bus = bus;
+    selectedKey.frameId = frameId;
+    selectedKey.extended = extended;
+
+    const QVector<ControlCandidate> candidates =
+        controlStateDetector->analyzeId(*frames, selectedKey);
+
+    controlCandidateModel->setCandidates(candidates);
+    refreshEmbeddedControlAnalysis();
+
+    if (ui->tabAnalysis && ui->tabControlStates) {
+        ui->tabAnalysis->setCurrentWidget(ui->tabControlStates);
+    }
+
+    statusBar()->showMessage(
+        tr("Loaded %1 control-state candidate(s) for ID 0x%2 from the current %3 list")
+            .arg(controlCandidateModel->rowCount())
+            .arg(QString::number(selectedKey.frameId, 16).toUpper())
+            .arg(useFiltered ? tr("filtered") : tr("loaded")),
+        4000);
+}
+
+void MainWindow::jumpToControlCandidate(int candidateIndex)
+{
+    if (!controlCandidateModel)
+        return;
+
+    if (candidateIndex < 0 || candidateIndex >= controlCandidateModel->rowCount())
+        return;
+
+    const ControlCandidate c = controlCandidateModel->candidateAt(candidateIndex);
+    if (c.exampleOriginalIndexes.isEmpty())
+        return;
+
+    jumpToOriginalIndex(c.exampleOriginalIndexes.first());
+}
+
+void MainWindow::bookmarkControlCandidate(int candidateIndex)
+{
+    if (!controlCandidateModel || !bookmarkManager || !model)
+        return;
+
+    if (candidateIndex < 0 || candidateIndex >= controlCandidateModel->rowCount())
+        return;
+
+    const ControlCandidate c = controlCandidateModel->candidateAt(candidateIndex);
+    if (c.exampleOriginalIndexes.isEmpty())
+        return;
+
+    const int originalIndex = c.exampleOriginalIndexes.first();
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames || originalIndex < 0 || originalIndex >= frames->size())
+        return;
+
+    const CANFrame &frame = frames->at(originalIndex);
+
+    FrameBookmark bm;
+    bm.originalIndex = originalIndex;
+    bm.timestampMicros = static_cast<quint64>(frame.timeStamp().seconds()) * 1000000ULL
+                       + static_cast<quint64>(frame.timeStamp().microSeconds());
+    bm.frameId = frame.frameId();
+    bm.bus = frame.bus;
+    bm.label = QStringLiteral("Control Candidate 0x%1")
+                   .arg(frame.frameId(), 0, 16)
+                   .toUpper();
+    bm.note = c.patternType + QStringLiteral(": ") + c.reason;
+
+    bookmarkManager->addBookmark(bm);
+    if (bookmarkDialog)
+        bookmarkDialog->refreshBookmarksView();
+}
+
+void MainWindow::showControlAnalysisWindow()
+{
+    if (!controlAnalysisDialog)
+        return;
+
+    controlAnalysisDialog->refreshCandidates();
+    controlAnalysisDialog->show();
+    controlAnalysisDialog->raise();
+    controlAnalysisDialog->activateWindow();
+}
+
 QString MainWindow::describeFlipStrength(double score) const
 {
     if (score >= 9.0) return tr("very likely related");
@@ -2859,7 +2935,7 @@ QString MainWindow::describeIdleNoise(double idleNoise) const
     return tr("changes often during normal driving");
 }
 
-QString MainWindow::describeSameIdReason(const FlipCandidate &c) const
+QString BookmarkEventAnalyzer::describeSameIdReason(const FlipCandidate &c) const
 {
     QStringList reasons;
 
@@ -2887,7 +2963,7 @@ QString MainWindow::describeSameIdReason(const FlipCandidate &c) const
     return reasons.join(tr(", "));
 }
 
-QString MainWindow::describeCrossIdReason(const CrossIdCandidate &c) const
+QString BookmarkEventAnalyzer::describeCrossIdReason(const CrossIdCandidate &c) const
 {
     QStringList reasons;
 
@@ -2931,7 +3007,7 @@ QString MainWindow::describeCrossIdReason(const CrossIdCandidate &c) const
     return reasons.join(tr(", "));
 }
 
-QVector<MainWindow::FlipCandidate> MainWindow::analyzeSameIdAroundBookmark(
+QVector<BookmarkEventAnalyzer::FlipCandidate> BookmarkEventAnalyzer::analyzeSameIdAroundBookmark(
     const QVector<CANFrame> &frames,
     int originalIndex,
     int sameIdRadius) const
@@ -2974,7 +3050,7 @@ QVector<MainWindow::FlipCandidate> MainWindow::analyzeSameIdAroundBookmark(
     return rankFlipCandidates(eventStats, sameIdRadius);
 }
 
-void MainWindow::accumulateEventFrame(EventFrameStats &stats,
+void BookmarkEventAnalyzer::accumulateEventFrame(EventFrameStats &stats,
                                       const CANFrame &frame,
                                       bool isBeforeSide,
                                       int anchorOriginalIndex) const
@@ -3028,7 +3104,7 @@ void MainWindow::accumulateEventFrame(EventFrameStats &stats,
     }
 }
 
-QVector<MainWindow::FlipCandidate> MainWindow::rankFlipCandidates(
+QVector<BookmarkEventAnalyzer::FlipCandidate> BookmarkEventAnalyzer::rankFlipCandidates(
     const QHash<FrameKey, EventFrameStats> &eventStats,
     int sameIdRadius) const
 {
@@ -3105,7 +3181,7 @@ QVector<MainWindow::FlipCandidate> MainWindow::rankFlipCandidates(
     return out;
 }
 
-MainWindow::SameIdScoreFeatures MainWindow::buildSameIdScoreFeatures(
+BookmarkEventAnalyzer::SameIdScoreFeatures BookmarkEventAnalyzer::buildSameIdScoreFeatures(
         const EventByteStats &eb,
         const ByteIdleStats *idleByteStats,
         int sameIdRadius) const
@@ -3123,26 +3199,26 @@ MainWindow::SameIdScoreFeatures MainWindow::buildSameIdScoreFeatures(
     return f;
 }
 
-double MainWindow::clamp01(double value)
+double BookmarkEventAnalyzer::clamp01(double value)
 {
     if (value < 0.0) return 0.0;
     if (value > 1.0) return 1.0;
     return value;
 }
 
-double MainWindow::safeRatio(double num, double denom)
+double BookmarkEventAnalyzer::safeRatio(double num, double denom)
 {
     if (denom <= 0.0) return 0.0;
     return num / denom;
 }
 
-double MainWindow::computeSameIdSupportScore(const EventByteStats &eb, int sameIdRadius) const
+double BookmarkEventAnalyzer::computeSameIdSupportScore(const EventByteStats &eb, int sameIdRadius) const
 {
     const double support = static_cast<double>(qMin(eb.beforeCount, eb.afterCount));
     return clamp01(safeRatio(support, static_cast<double>(qMax(1, sameIdRadius))));
 }
 
-double MainWindow::computeSameIdLocalStability(const EventByteStats &eb) const
+double BookmarkEventAnalyzer::computeSameIdLocalStability(const EventByteStats &eb) const
 {
     const int transitionCount = eb.beforeTransitions + eb.afterTransitions;
     const int opportunityCount =
@@ -3154,7 +3230,7 @@ double MainWindow::computeSameIdLocalStability(const EventByteStats &eb) const
     return 1.0 - localNoise;
 }
 
-double MainWindow::computeSameIdIdleStability(const ByteIdleStats *idleByteStats) const
+double BookmarkEventAnalyzer::computeSameIdIdleStability(const ByteIdleStats *idleByteStats) const
 {
     if (!idleByteStats) return 0.0;
     if (idleByteStats->samples <= 1) return 0.0;
@@ -3165,7 +3241,7 @@ double MainWindow::computeSameIdIdleStability(const ByteIdleStats *idleByteStats
     return 1.0 - idleNoise;
 }
 
-double MainWindow::scoreSameIdCandidate(const SameIdScoreFeatures &f) const
+double BookmarkEventAnalyzer::scoreSameIdCandidate(const SameIdScoreFeatures &f) const
 {
     const double raw =
             (3.5 * f.eventDelta) +
@@ -3177,7 +3253,7 @@ double MainWindow::scoreSameIdCandidate(const SameIdScoreFeatures &f) const
 }
 
 
-MainWindow::CrossIdScoreFeatures MainWindow::buildCrossIdScoreFeatures(
+BookmarkEventAnalyzer::CrossIdScoreFeatures BookmarkEventAnalyzer::buildCrossIdScoreFeatures(
         const CrossIdEventStats &stats,
         const FrameIdleStats *idleStats,
         int windowBefore,
@@ -3194,7 +3270,7 @@ MainWindow::CrossIdScoreFeatures MainWindow::buildCrossIdScoreFeatures(
     return f;
 }
 
-double MainWindow::scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const
+double BookmarkEventAnalyzer::scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const
 {
     return (3.0 * f.appearanceShift) +
            (0.9 * f.exclusiveAfter) +
@@ -3203,7 +3279,7 @@ double MainWindow::scoreCrossIdCandidate(const CrossIdScoreFeatures &f) const
            (0.0 * f.idleStability);
 }
 
-double MainWindow::computeCrossIdAppearanceShift(const CrossIdEventStats &stats,
+double BookmarkEventAnalyzer::computeCrossIdAppearanceShift(const CrossIdEventStats &stats,
                                                  int windowBefore,
                                                  int windowAfter) const
 {
@@ -3212,14 +3288,14 @@ double MainWindow::computeCrossIdAppearanceShift(const CrossIdEventStats &stats,
     return clamp01(afterRate - beforeRate);
 }
 
-double MainWindow::computeCrossIdPayloadVolatility(const CrossIdEventStats &stats) const
+double BookmarkEventAnalyzer::computeCrossIdPayloadVolatility(const CrossIdEventStats &stats) const
 {
     const int payloadChangeCount = stats.beforePayloadTransitions + stats.afterPayloadTransitions;
     const int opportunities = qMax(1, (stats.beforeCount + stats.afterCount) - 1);
     return clamp01(static_cast<double>(payloadChangeCount) / static_cast<double>(opportunities));
 }
 
-double MainWindow::computeCrossIdIdleStability(const FrameIdleStats *idleStats) const
+double BookmarkEventAnalyzer::computeCrossIdIdleStability(const FrameIdleStats *idleStats) const
 {
     if (!idleStats) return 0.0;
 
@@ -3484,7 +3560,8 @@ QString MainWindow::formatNeighborhoodText(const QModelIndex &sourceIndex, int r
     return lines.join('\n');
 }
 
-void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result)
+
+void MainWindow::showBookmarkAnalysisDialog(const BookmarkEventAnalyzer::BookmarkAnalysisResult &result)
 {
     QDialog *dlg = new QDialog(this);
     dlg->setAttribute(Qt::WA_DeleteOnClose);
@@ -3579,7 +3656,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
     sameIdTable->setRowCount(result.sameIdCandidates.size());
     for (int row = 0; row < result.sameIdCandidates.size(); row++)
     {
-        const FlipCandidate &c = result.sameIdCandidates.at(row);
+        const BookmarkEventAnalyzer::FlipCandidate &c = result.sameIdCandidates.at(row);
 
         QString detail = tr("Bus %1, ID %2, byte %3 changed %4 -> %5\n"
                             "Score %6, %7\n"
@@ -3596,7 +3673,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
                 .arg(c.afterValue, 2, 16, QLatin1Char('0')).toUpper()
                 .arg(c.score, 0, 'f', 2)
                 .arg(describeFlipStrength(c.score))
-                .arg(describeSameIdReason(c))
+                .arg(bookmarkEventAnalyzer ? bookmarkEventAnalyzer->describeSameIdReason(c) : QString())
                 .arg(c.supportScore, 0, 'f', 2)
                 .arg(c.localStability, 0, 'f', 2)
                 .arg(c.localNoise, 0, 'f', 3)
@@ -3632,7 +3709,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
     crossIdTable->setRowCount(result.crossIdCandidates.size());
     for (int row = 0; row < result.crossIdCandidates.size(); row++)
     {
-        const CrossIdCandidate &c = result.crossIdCandidates.at(row);
+        const BookmarkEventAnalyzer::CrossIdCandidate &c = result.crossIdCandidates.at(row);
 
         QString detail = tr("Bus %1, ID %2\n"
                             "Score %3\n"
@@ -3647,7 +3724,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
                 .arg(c.key.bus)
                 .arg(Utility::formatCANID(c.key.frameId, c.key.extended))
                 .arg(c.score, 0, 'f', 2)
-                .arg(describeCrossIdReason(c))
+                .arg(bookmarkEventAnalyzer ? bookmarkEventAnalyzer->describeCrossIdReason(c) : QString())
                 .arg(c.beforeCount)
                 .arg(c.afterCount)
                 .arg(c.totalEventCount)
@@ -3858,7 +3935,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
                 return;
             }
 
-            graphAnalysisOriginalIndex(originalIndex);
+            graphFrameByOriginalIndex(originalIndex);
         }
         else
         {
@@ -3875,7 +3952,7 @@ void MainWindow::showBookmarkAnalysisDialog(const BookmarkAnalysisResult &result
                 return;
             }
 
-            graphAnalysisOriginalIndex(originalIndex);
+            graphFrameByOriginalIndex(originalIndex);
         }
     });
 
@@ -3912,42 +3989,8 @@ void MainWindow::jumpToAnalysisFrameIndex(int originalIndex)
     selectFrameByOriginalIndex(originalIndex);
 }
 
-void MainWindow::graphAnalysisOriginalIndex(int originalIndex)
-{
-    if (!model)
-        return;
 
-    const QVector<CANFrame> *frames = model->getListReference();
-    if (!frames || frames->isEmpty())
-        return;
-
-    const CANFrame *targetFrame = nullptr;
-
-    for (const CANFrame &frame : *frames)
-    {
-        if (frame.originalIndex == originalIndex)
-        {
-            targetFrame = &frame;
-            break;
-        }
-    }
-
-    if (!targetFrame)
-    {
-        statusBar()->showMessage(tr("Could not find a nearby frame to graph for this candidate"), 2500);
-        return;
-    }
-
-    showGraphingWindow();
-    emit sendCenterTimeID(targetFrame->frameId(),
-                          targetFrame->timeStamp().microSeconds() / 1000000.0);
-
-    if (!selectFrameByOriginalIndex(originalIndex))
-        statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
-}
-
-
-void MainWindow::graphAnalysisFrameKey(const FrameKey &key)
+void MainWindow::graphAnalysisFrameKey(const BookmarkEventAnalyzer::FrameKey &key)
 {
     if (!model)
         return;
@@ -3973,4 +4016,433 @@ void MainWindow::graphAnalysisFrameKey(const FrameKey &key)
     }
 
     statusBar()->showMessage(tr("Could not find a frame to graph for the selected ID"), 2500);
+}
+
+void MainWindow::setupEmbeddedAnalysisViews()
+{
+    if (ui->tableControlAnalysis) {
+        ui->tableControlAnalysis->setModel(controlCandidateModel);
+        ui->tableControlAnalysis->setSelectionBehavior(QAbstractItemView::SelectRows);
+        ui->tableControlAnalysis->setSelectionMode(QAbstractItemView::SingleSelection);
+        ui->tableControlAnalysis->setAlternatingRowColors(true);
+        ui->tableControlAnalysis->setSortingEnabled(false);
+        ui->tableControlAnalysis->setContextMenuPolicy(Qt::CustomContextMenu);
+        ui->tableControlAnalysis->horizontalHeader()->setStretchLastSection(true);
+        ui->tableControlAnalysis->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        ui->tableControlAnalysis->verticalHeader()->setVisible(false);
+        ui->tableControlAnalysis->setColumnWidth(ControlCandidateModel::ReasonCol, 420);
+
+        connect(ui->tableControlAnalysis, &QTableView::doubleClicked,
+                this, [this](const QModelIndex &index) {
+                    if (!index.isValid()) return;
+                    jumpToControlCandidate(index.row());
+                });
+
+        connect(ui->tableControlAnalysis, &QWidget::customContextMenuRequested,
+                this, [this](const QPoint &) {
+                    // You can add a menu later if desired.
+                    // For now, keep behavior simple and avoid a dead signal hookup.
+                });
+
+        if (ui->tableControlAnalysis->selectionModel()) {
+            connect(ui->tableControlAnalysis->selectionModel(), &QItemSelectionModel::currentRowChanged,
+                    this, &MainWindow::updateEmbeddedControlDetailsForCurrentRow);
+        }
+    }
+
+    if (ui->textControlAnalysis) {
+        ui->textControlAnalysis->setReadOnly(true);
+        ui->textControlAnalysis->setLineWrapMode(QPlainTextEdit::NoWrap);
+        ui->textControlAnalysis->setPlainText(tr("No control-state analysis loaded."));
+    }
+
+    if (ui->eventCorrelationView) {
+        ui->eventCorrelationView->setColumnCount(10);
+        ui->eventCorrelationView->setHorizontalHeaderLabels(
+            QStringList() << tr("Score")
+                          << tr("Bus")
+                          << tr("ID")
+                          << tr("Before")
+                          << tr("After")
+                          << tr("Shift")
+                          << tr("Volatility")
+                          << tr("Idle Stability")
+                          << tr("Distance")
+                          << tr("Reason"));
+        ui->eventCorrelationView->setSelectionBehavior(QAbstractItemView::SelectRows);
+        ui->eventCorrelationView->setSelectionMode(QAbstractItemView::SingleSelection);
+        ui->eventCorrelationView->setAlternatingRowColors(true);
+        ui->eventCorrelationView->setSortingEnabled(true);
+        ui->eventCorrelationView->horizontalHeader()->setStretchLastSection(true);
+        ui->eventCorrelationView->horizontalHeader()->setSectionResizeMode(QHeaderView::ResizeToContents);
+        ui->eventCorrelationView->verticalHeader()->setVisible(false);
+
+        connect(ui->eventCorrelationView, &QTableWidget::cellDoubleClicked,
+                this, [this](int, int) {
+                    jumpToSelectedEventCorrelationCandidate();
+                });
+    }
+
+    if (ui->btnEventCorrelationJump) {
+        ui->btnEventCorrelationJump->setText(tr("Jump To"));
+        connect(ui->btnEventCorrelationJump, &QPushButton::clicked,
+                this, &MainWindow::jumpToSelectedEventCorrelationCandidate);
+    }
+
+    if (ui->btnEventCorrelationBookmark) {
+        ui->btnEventCorrelationBookmark->setText(tr("Bookmark"));
+        connect(ui->btnEventCorrelationBookmark, &QPushButton::clicked,
+                this, &MainWindow::bookmarkSelectedEventCorrelationCandidate);
+    }
+
+    refreshEmbeddedControlAnalysis();
+    clearEmbeddedEventCorrelation();
+}
+
+void MainWindow::refreshEmbeddedControlAnalysis()
+{
+    if (!ui->tableControlAnalysis || !controlCandidateModel)
+        return;
+
+    ui->tableControlAnalysis->clearSelection();
+    ui->tableControlAnalysis->resizeColumnsToContents();
+    ui->tableControlAnalysis->setColumnWidth(ControlCandidateModel::ReasonCol, 420);
+
+    if (controlCandidateModel->rowCount() > 0) {
+        ui->tableControlAnalysis->selectRow(0);
+        updateEmbeddedControlDetailsTextForRow(0);
+    } else if (ui->textControlAnalysis) {
+        ui->textControlAnalysis->setPlainText(tr("No control-state candidates."));
+    }
+}
+
+void MainWindow::updateEmbeddedControlDetailsForCurrentRow(const QModelIndex &current, const QModelIndex &previous)
+{
+    Q_UNUSED(previous);
+
+    if (!current.isValid()) {
+        if (ui->textControlAnalysis)
+            ui->textControlAnalysis->setPlainText(tr("No control-state candidate selected."));
+        return;
+    }
+
+    updateEmbeddedControlDetailsTextForRow(current.row());
+}
+
+void MainWindow::updateEmbeddedControlDetailsTextForRow(int row)
+{
+    if (!controlCandidateModel || !ui->textControlAnalysis ||
+        row < 0 || row >= controlCandidateModel->rowCount()) {
+        if (ui->textControlAnalysis)
+            ui->textControlAnalysis->clear();
+        return;
+    }
+
+    const ControlCandidate &candidate = controlCandidateModel->candidateAt(row);
+    ui->textControlAnalysis->setPlainText(
+        controlCandidateModel->formatExpandedSequenceDetails(candidate));
+    }
+
+void MainWindow::jumpToSelectedEmbeddedControlCandidate()
+{
+    if (!ui->tableControlAnalysis || !ui->tableControlAnalysis->selectionModel())
+        return;
+
+    const QModelIndex idx = ui->tableControlAnalysis->selectionModel()->currentIndex();
+    if (idx.isValid())
+        jumpToControlCandidate(idx.row());
+}
+
+void MainWindow::bookmarkSelectedEmbeddedControlCandidate()
+{
+    if (!ui->tableControlAnalysis || !ui->tableControlAnalysis->selectionModel())
+        return;
+
+    const QModelIndex idx = ui->tableControlAnalysis->selectionModel()->currentIndex();
+    if (idx.isValid())
+        bookmarkControlCandidate(idx.row());
+}
+
+void MainWindow::refreshEmbeddedEventCorrelation(const BookmarkEventAnalyzer::BookmarkAnalysisResult &result)
+{
+    lastBookmarkAnalysisResult = result;
+
+    if (!ui->eventCorrelationView)
+        return;
+
+    ui->eventCorrelationView->setSortingEnabled(false);
+    ui->eventCorrelationView->clearContents();
+    ui->eventCorrelationView->setRowCount(result.crossIdCandidates.size());
+
+    for (int row = 0; row < result.crossIdCandidates.size(); ++row) {
+        const BookmarkEventAnalyzer::CrossIdCandidate &c = result.crossIdCandidates.at(row);
+
+        auto *scoreItem = new NumericTableWidgetItem(c.score, QString::number(c.score, 'f', 3));
+        auto *busItem = new NumericTableWidgetItem(c.key.bus, QString::number(c.key.bus));
+        auto *idItem = new NumericTableWidgetItem(
+            c.key.frameId,
+            QStringLiteral("0x%1").arg(c.key.frameId, c.key.extended ? 8 : 3, 16, QLatin1Char('0')).toUpper());
+        auto *beforeItem = new NumericTableWidgetItem(c.beforeCount, QString::number(c.beforeCount));
+        auto *afterItem = new NumericTableWidgetItem(c.afterCount, QString::number(c.afterCount));
+        auto *shiftItem = new NumericTableWidgetItem(c.appearanceShift, QString::number(c.appearanceShift, 'f', 3));
+        auto *volItem = new NumericTableWidgetItem(c.payloadVolatility, QString::number(c.payloadVolatility, 'f', 3));
+        auto *idleItem = new NumericTableWidgetItem(c.idleStability, QString::number(c.idleStability, 'f', 3));
+        auto *distItem = new NumericTableWidgetItem(
+            c.nearestDistance == std::numeric_limits<int>::max() ? 999999 : c.nearestDistance,
+            c.nearestDistance == std::numeric_limits<int>::max() ? tr("-") : QString::number(c.nearestDistance));
+        auto *reasonItem = new QTableWidgetItem(
+            bookmarkEventAnalyzer ? bookmarkEventAnalyzer->describeCrossIdReason(c) : QString());
+
+        scoreItem->setData(Qt::UserRole, row);
+        scoreItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+
+        busItem->setData(Qt::UserRole, row);
+        idItem->setData(Qt::UserRole, row);
+        beforeItem->setData(Qt::UserRole, row);
+        afterItem->setData(Qt::UserRole, row);
+        shiftItem->setData(Qt::UserRole, row);
+        volItem->setData(Qt::UserRole, row);
+        idleItem->setData(Qt::UserRole, row);
+        distItem->setData(Qt::UserRole, row);
+        reasonItem->setData(Qt::UserRole, row);
+
+        busItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        idItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        beforeItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        afterItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        shiftItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        volItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        idleItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        distItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+        reasonItem->setData(Qt::UserRole + 1, c.nearestOriginalIndex);
+
+        ui->eventCorrelationView->setItem(row, 0, scoreItem);
+        ui->eventCorrelationView->setItem(row, 1, busItem);
+        ui->eventCorrelationView->setItem(row, 2, idItem);
+        ui->eventCorrelationView->setItem(row, 3, beforeItem);
+        ui->eventCorrelationView->setItem(row, 4, afterItem);
+        ui->eventCorrelationView->setItem(row, 5, shiftItem);
+        ui->eventCorrelationView->setItem(row, 6, volItem);
+        ui->eventCorrelationView->setItem(row, 7, idleItem);
+        ui->eventCorrelationView->setItem(row, 8, distItem);
+        ui->eventCorrelationView->setItem(row, 9, reasonItem);
+    }
+
+    ui->eventCorrelationView->setSortingEnabled(true);
+    ui->eventCorrelationView->sortItems(0, Qt::DescendingOrder);
+    ui->eventCorrelationView->resizeColumnsToContents();
+
+    if (result.crossIdCandidates.isEmpty()) {
+        ui->eventCorrelationView->clearSelection();
+        if (ui->eventCorrelationView)
+            ui->eventCorrelationView->clear();
+    } else {
+        ui->eventCorrelationView->setCurrentCell(0, 0);
+    }
+}
+
+void MainWindow::clearEmbeddedEventCorrelation()
+{
+    lastBookmarkAnalysisResult = BookmarkEventAnalyzer::BookmarkAnalysisResult();
+
+    if (ui->eventCorrelationView) {
+        ui->eventCorrelationView->setSortingEnabled(false);
+        ui->eventCorrelationView->clearContents();
+        ui->eventCorrelationView->setRowCount(0);
+        ui->eventCorrelationView->setSortingEnabled(true);
+    }
+}
+
+void MainWindow::bookmarkSelectedEventCorrelationCandidate()
+{
+    const int candidateIndex = currentEventCorrelationCandidateIndex();
+    if (candidateIndex < 0 || candidateIndex >= lastBookmarkAnalysisResult.crossIdCandidates.size()) {
+        statusBar()->showMessage(tr("No event correlation candidate is selected"), 2500);
+        return;
+    }
+
+    const BookmarkEventAnalyzer::CrossIdCandidate &c =
+            lastBookmarkAnalysisResult.crossIdCandidates.at(candidateIndex);
+
+    if (c.nearestOriginalIndex < 0) {
+        statusBar()->showMessage(tr("Selected candidate has no nearby frame to bookmark"), 2500);
+        return;
+    }
+
+    const QString label = QStringLiteral("Event Correlation: 0x%1")
+            .arg(c.key.frameId, 0, 16)
+            .toUpper();
+    const QString note = bookmarkEventAnalyzer
+            ? bookmarkEventAnalyzer->describeCrossIdReason(c)
+            : QString();
+
+    if (!bookmarkFrameByOriginalIndex(c.nearestOriginalIndex, label, note)) {
+        statusBar()->showMessage(tr("Could not create bookmark for the selected frame"), 2500);
+        return;
+    }
+
+    statusBar()->showMessage(
+            tr("Bookmark added for frame %1").arg(c.nearestOriginalIndex),
+            2000);
+}
+
+void MainWindow::jumpToSelectedEventCorrelationCandidate()
+{
+    const int candidateIndex = currentEventCorrelationCandidateIndex();
+    if (candidateIndex < 0 || candidateIndex >= lastBookmarkAnalysisResult.crossIdCandidates.size()) {
+        statusBar()->showMessage(tr("No event correlation candidate is selected"), 2500);
+        return;
+    }
+
+    const BookmarkEventAnalyzer::CrossIdCandidate &c =
+            lastBookmarkAnalysisResult.crossIdCandidates.at(candidateIndex);
+
+    if (c.nearestOriginalIndex < 0) {
+        statusBar()->showMessage(tr("Selected candidate has no nearby frame to jump to"), 2500);
+        return;
+    }
+
+    if (!selectFrameByOriginalIndex(c.nearestOriginalIndex)) {
+        statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
+        return;
+    }
+
+    statusBar()->showMessage(
+            tr("Jumped to nearby frame %1").arg(c.nearestOriginalIndex),
+            2000);
+}
+
+void MainWindow::refreshAnalysisTabsForCurrentSelection()
+{
+    CANFrame frame;
+    QModelIndex sourceIndex;
+    if (!getSelectedFrameInfo(frame, &sourceIndex)) {
+        clearEmbeddedEventCorrelation();
+        return;
+    }
+
+    if (frame.originalIndex < 0) {
+        clearEmbeddedEventCorrelation();
+        return;
+    }
+
+    QSettings settings;
+    const int sameIdRadius = settings.value("Analysis/SameIdRadius", 5).toInt();
+    const int crossIdBefore = settings.value("Analysis/CrossIdWindowBefore", 300).toInt();
+    const int crossIdAfter = settings.value("Analysis/CrossIdWindowAfter", 300).toInt();
+
+    const BookmarkEventAnalyzer::BookmarkAnalysisResult result =
+        analyzeBookmarkEvent(frame.originalIndex, sameIdRadius, crossIdBefore, crossIdAfter);
+
+    refreshEmbeddedEventCorrelation(result);
+}
+
+static int crossIdCandidateIndexFromTable(QTableWidget *table, int visualRow)
+{
+    if (!table || visualRow < 0) return -1;
+
+    QTableWidgetItem *item = table->item(visualRow, 0);
+    if (!item) return -1;
+
+    bool ok = false;
+    const int idx = item->data(Qt::UserRole).toInt(&ok);
+    return ok ? idx : -1;
+}
+
+static int analysisOriginalIndexFromTable(QTableWidget *table, int visualRow)
+{
+    if (!table || visualRow < 0) return -1;
+
+    QTableWidgetItem *item = table->item(visualRow, 0);
+    if (!item) return -1;
+
+    bool ok = false;
+    const int originalIndex = item->data(Qt::UserRole + 1).toInt(&ok);
+    return ok ? originalIndex : -1;
+}
+
+int MainWindow::currentEventCorrelationCandidateIndex() const
+{
+    if (!ui || !ui->eventCorrelationView)
+        return -1;
+
+    const int visualRow = ui->eventCorrelationView->currentRow();
+    const int visualCol = ui->eventCorrelationView->currentColumn();
+    if (visualRow < 0)
+        return -1;
+
+    QTableWidgetItem *item = ui->eventCorrelationView->item(visualRow, visualCol >= 0 ? visualCol : 0);
+    if (!item)
+        item = ui->eventCorrelationView->item(visualRow, 0);
+    if (!item)
+        return -1;
+
+    bool ok = false;
+    const int candidateIndex = item->data(Qt::UserRole).toInt(&ok);
+    return ok ? candidateIndex : -1;
+}
+
+bool MainWindow::resolveFrameByOriginalIndex(int originalIndex, CANFrame &outFrame) const
+{
+    if (!model)
+        return false;
+
+    const QVector<CANFrame> *frames = model->getListReference();
+    if (!frames)
+        return false;
+
+    for (const CANFrame &frame : *frames)
+    {
+        if (frame.originalIndex == originalIndex)
+        {
+            outFrame = frame;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool MainWindow::bookmarkFrameByOriginalIndex(int originalIndex, const QString &label, const QString &note)
+{
+    if (!bookmarkManager)
+        return false;
+
+    CANFrame frame;
+    if (!resolveFrameByOriginalIndex(originalIndex, frame))
+        return false;
+
+    FrameBookmark bm;
+    bm.originalIndex = frame.originalIndex;
+    bm.timestampMicros = quint64(frame.timeStamp().seconds()) * 1000000ULL
+            + frame.timeStamp().microSeconds();
+    bm.frameId = frame.frameId();
+    bm.bus = frame.bus;
+    bm.label = label;
+    bm.note = note;
+
+    bookmarkManager->addBookmark(bm);
+
+    if (bookmarkDialog)
+        bookmarkDialog->refreshBookmarksView();
+
+    return true;
+}
+
+void MainWindow::graphFrameByOriginalIndex(int originalIndex)
+{
+    CANFrame frame;
+    if (!resolveFrameByOriginalIndex(originalIndex, frame))
+    {
+        statusBar()->showMessage(tr("Could not find a nearby frame to graph for this candidate"), 2500);
+        return;
+    }
+
+    showGraphingWindow();
+    emit sendCenterTimeID(frame.frameId(),
+                          double(frame.timeStamp().seconds())
+                              + (double(frame.timeStamp().microSeconds()) / 1000000.0));
+
+    if (!selectFrameByOriginalIndex(originalIndex))
+        statusBar()->showMessage(tr("Matching frame is hidden by filters"), 2500);
 }
