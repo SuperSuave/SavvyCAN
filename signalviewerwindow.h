@@ -17,11 +17,8 @@ public:
     ~SignalViewerWindow();
 
 private slots:
-    void loadNodes();
-    void loadMessages(int idx);
-    void loadSignals(int idx);
-    void addSignal();
     void addSignal(DBC_SIGNAL *sig);
+    void removeSignal(DBC_SIGNAL *sig);
     void removeSelectedSignal();
     void updatedFrames(int);
     void saveSignalsFile();

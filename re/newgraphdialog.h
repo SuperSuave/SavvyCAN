@@ -25,9 +25,6 @@ private slots:
     void addButtonClicked();
     void colorSwatchClick();
     void fillSwatchClick();
-    void loadNodes();
-    void loadMessages(int idx);
-    void loadSignals(int idx);
     void bitfieldClicked(int);
     void handleDataLenUpdate();
     void drawBitfield();

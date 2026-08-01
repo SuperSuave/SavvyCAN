@@ -109,7 +109,8 @@ SOURCES += main.cpp\
     re/temporalgraphwindow.cpp \
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
-    pcaplite.cpp
+    pcaplite.cpp \
+    dbcsignalselectortree.cpp
 
 HEADERS  += mainwindow.h \
     bookmarkmanager.h \
@@ -208,7 +209,8 @@ HEADERS  += mainwindow.h \
     re/temporalgraphwindow.h \
     re/udsfirmwareuploaderwindow.h \
     filterutility.h \
-    pcaplite.h
+    pcaplite.h \
+    dbcsignalselectortree.h
 
 FORMS    += ui/candatagrid.ui \
     triggerdialog.ui \
@@ -245,7 +247,8 @@ FORMS    += ui/candatagrid.ui \
     ui/helpwindow.ui \
     ui/newconnectiondialog.ui \
     ui/temporalgraphwindow.ui \
-    ui/udsfirmwareuploaderwindow.ui
+    ui/udsfirmwareuploaderwindow.ui \
+    ui/dbcsignalselectortree.ui
     
 RESOURCES += \
     icons.qrc \
