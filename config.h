@@ -1,7 +1,7 @@
 #ifndef CONFIG
 #define CONFIG
 
-#define VERSION "2026.7.2"
+#define VERSION "2026.8.1"
 
 //try to keep this in sync.
 //SavvyLens will complain if you connect a GVRET board with a revision
