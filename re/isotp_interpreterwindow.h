@@ -4,6 +4,7 @@
 #include <QDialog>
 #include "bus_protocols/isotp_handler.h"
 
+
 class ISOTP_MESSAGE;
 class ISOTP_HANDLER;
 
@@ -19,6 +20,10 @@ public:
     explicit ISOTP_InterpreterWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~ISOTP_InterpreterWindow();
     void showEvent(QShowEvent*);
+
+    void openAndConfigure(int rxId);
+    const QVector<ISOTP_MESSAGE>& getMessagesList() const { return messages; }
+    void sendISOTPFrame(int bus, int id, QByteArray data);
 
 private slots:
     void newISOMessage(ISOTP_MESSAGE msg);

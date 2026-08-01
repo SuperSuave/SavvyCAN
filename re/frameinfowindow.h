@@ -5,8 +5,10 @@
 #include <QFile>
 #include <QListWidget>
 #include <QTreeWidget>
+#include <QPushButton>
 #include <candatagrid.h>
 #include "can_structs.h"
+#include "utility.h"
 #include "bus_protocols/j1939_handler.h"
 #include "dbc/dbchandler.h"
 
@@ -24,6 +26,8 @@ public:
     explicit FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FrameInfoWindow();
     void showEvent(QShowEvent*);
+    void selectID(QString idStr);
+    QTreeWidget* getDetailsTree() const;
 
 private slots:
     void updateDetailsWindow(QString);
@@ -33,6 +37,10 @@ private slots:
     void mouseWheel();
     void mouseDoubleClick();
     void applyPlotTheme(QCustomPlot*);
+    void resetByteGraph(int idx);
+    void resetAllByteGraphs();
+    void togglePlotType(int idx, bool scatter);
+    void toggleAllPlotType(bool scatter);
 
 private:
     Ui::FrameInfoWindow *ui;
@@ -46,18 +54,23 @@ private:
     bool useOpenGL;
     bool useHexTicker;
     static QColor byteGraphColorForIndex(int idx);
+    TimeStyle timeStyle;
     static QPen bytePens[8];
     DBCHandler *dbcHandler;
 
     QCPGraph *graphRef[8];
+    QPushButton *btnResetByteGraph[8];
+    QPushButton *btnTogglePlotType[8];
 
     void refreshIDList();
+    void captureXRange(double &xmin, double &xmax);
     void closeEvent(QCloseEvent *event);
     bool eventFilter(QObject *obj, QEvent *event);
     void setupByteGraph(QCustomPlot *plot, int num);
     void readSettings();
     void writeSettings();
     void dumpNode(QTreeWidgetItem* item, QFile *file, int indent);
+
 };
 
 #endif // FRAMEINFOWINDOW_H

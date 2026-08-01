@@ -641,6 +641,21 @@ void FramePlaybackWindow::btnPlayClick()
     updateFrameLabel();
 }
 
+void FramePlaybackWindow::playPlayback()
+{
+    btnPlayClick();
+}
+
+void FramePlaybackWindow::pausePlayback()
+{
+    btnPauseClick();
+}
+
+void FramePlaybackWindow::stopPlayback()
+{
+    btnStopClick();
+}
+
 void FramePlaybackWindow::btnFwdOneClick()
 {
     if (!checkNoSeqLoaded()) return;

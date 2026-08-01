@@ -87,6 +87,9 @@ MainSettingsDialog::MainSettingsDialog(QWidget *parent) :
     QString decPass = crypto.decryptToString(encPass);
     ui->lineRemotePassword->setText(decPass);
 
+    ui->cbMcpEnable->setChecked(settings.value("MCP/Enable", true).toBool());
+    ui->lineMcpPort->setText(settings.value("MCP/Port", "8888").toString());
+
     ui->cbLoadConnections->setChecked(settings.value("Main/SaveRestoreConnections", false).toBool());
 
     ui->spinFontSize->setValue(settings.value("Main/FontSize", ui->cbDisplayHex->font().pointSize()).toUInt());
@@ -181,6 +184,8 @@ MainSettingsDialog::MainSettingsDialog(QWidget *parent) :
     connect(ui->lineRemotePort, SIGNAL(editingFinished()), this, SLOT(updateSettings()));
     connect(ui->lineRemoteUser, SIGNAL(editingFinished()), this, SLOT(updateSettings()));
     connect(ui->lineRemotePassword, SIGNAL(editingFinished()), this, SLOT(updateSettings()));
+    connect(ui->cbMcpEnable, SIGNAL(toggled(bool)), this, SLOT(updateSettings()));
+    connect(ui->lineMcpPort, SIGNAL(editingFinished()), this, SLOT(updateSettings()));
     connect(ui->cbLoadConnections, SIGNAL(toggled(bool)), this, SLOT(updateSettings()));
     connect(ui->cbFilterLabeling, SIGNAL(toggled(bool)), this, SLOT(updateSettings()));
     connect(ui->cbHexGraphFlow, SIGNAL(toggled(bool)), this, SLOT(updateSettings()));
@@ -255,6 +260,8 @@ void MainSettingsDialog::updateSettings()
     settings.setValue("Remote/User", ui->lineRemoteUser->text());
     QByteArray encPass = crypto.encryptToByteArray(ui->lineRemotePassword->text());
     settings.setValue("Remote/Pass", encPass);
+    settings.setValue("MCP/Enable", ui->cbMcpEnable->isChecked());
+    settings.setValue("MCP/Port", ui->lineMcpPort->text());
     settings.setValue("Main/FilterLabeling", ui->cbFilterLabeling->isChecked());
     settings.setValue("Main/IgnoreDBCColors", ui->cbIgnoreDBCColors->isChecked());
     settings.setValue("Main/MaximumFrames", ui->spinMaximumFrames->value());

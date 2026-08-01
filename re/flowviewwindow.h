@@ -4,6 +4,7 @@
 #include <QDialog>
 #include <QLocale>
 #include <QSlider>
+
 #include "qcustomplot.h"
 #include "can_structs.h"
 
@@ -19,8 +20,9 @@ public:
     explicit FlowViewWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FlowViewWindow();
     void showEvent(QShowEvent*);
-
-private slots:
+    uint32_t getSelectedId() const;
+    int getFrameCount() const;
+    int getTriggerValue(int index) const;
     void btnBackOneClick();
     void btnPauseClick();
     void btnReverseClick();
