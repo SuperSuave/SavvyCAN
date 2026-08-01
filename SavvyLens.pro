@@ -114,6 +114,7 @@ SOURCES += main.cpp\
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
     pcaplite.cpp \
+    dbcsignalselectortree.cpp
     mcp/mcpserver.cpp \
     mcp/mcptools_list.cpp \
     mcp/mcptools_call.cpp
@@ -222,6 +223,7 @@ HEADERS  += mainwindow.h \
     re/udsfirmwareuploaderwindow.h \
     filterutility.h \
     pcaplite.h \
+    dbcsignalselectortree.h
     mcp/mcpserver.h
 
     re/bookmarkeventanalyzer.h
@@ -261,7 +263,8 @@ FORMS    += ui/candatagrid.ui \
     ui/helpwindow.ui \
     ui/newconnectiondialog.ui \
     ui/temporalgraphwindow.ui \
-    ui/udsfirmwareuploaderwindow.ui
+    ui/udsfirmwareuploaderwindow.ui \
+    ui/dbcsignalselectortree.ui
     
 RESOURCES += \
     icons.qrc \

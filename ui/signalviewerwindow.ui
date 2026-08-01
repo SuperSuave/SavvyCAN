@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <ui version="4.0">
  <class>SignalViewerWindow</class>
  <widget class="QDialog" name="SignalViewerWindow">
@@ -13,7 +13,7 @@
   <property name="windowTitle">
    <string>Signal Viewer</string>
   </property>
-  <layout class="QHBoxLayout" name="horizontalLayout" stretch="3,1">
+  <layout class="QHBoxLayout" name="horizontalLayout" stretch="2,1">
    <item>
     <layout class="QVBoxLayout" name="verticalLayout_2">
      <item>
@@ -33,9 +33,9 @@
        <attribute name="verticalHeaderStretchLastSection">
         <bool>false</bool>
        </attribute>
-       <column/>
-       <column/>
-       <column/>
+       <column />
+       <column />
+       <column />
       </widget>
      </item>
      <item>
@@ -49,44 +49,7 @@
    </item>
    <item>
     <layout class="QVBoxLayout" name="verticalLayout">
-     <item>
-      <widget class="QLabel" name="label_3">
-       <property name="text">
-        <string>Node</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="cbNodes"/>
-     </item>
-     <item>
-      <widget class="QLabel" name="label">
-       <property name="text">
-        <string>Message</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="cbMessages"/>
-     </item>
-     <item>
-      <widget class="QLabel" name="label_2">
-       <property name="text">
-        <string>Signal</string>
-       </property>
-      </widget>
-     </item>
-     <item>
-      <widget class="QComboBox" name="cbSignals"/>
-     </item>
-     <item>
-      <widget class="QPushButton" name="btnAdd">
-       <property name="text">
-        <string>Add To Viewer</string>
-       </property>
-      </widget>
-     </item>
-     <item>
+     <item><widget class="DbcSignalSelectorTree" name="signalTree" native="true" /></item><item>
       <spacer name="verticalSpacer">
        <property name="orientation">
         <enum>Qt::Vertical</enum>
@@ -131,6 +94,6 @@
    </item>
   </layout>
  </widget>
- <resources/>
- <connections/>
-</ui>
+ <resources />
+ <connections />
+<customwidgets><customwidget><class>DbcSignalSelectorTree</class><extends>QWidget</extends><header>dbcsignalselectortree.h</header><container>1</container></customwidget></customwidgets></ui>
