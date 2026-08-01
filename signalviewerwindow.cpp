@@ -116,8 +116,8 @@ void SignalViewerWindow::removeSelectedSignal()
 {
     int selRow = ui->tableViewer->currentRow();
     if (selRow < 0) return; //no selected row
-    signalList.removeAt(selRow);
-    ui->tableViewer->removeRow(selRow);
+    DBC_SIGNAL *sig = signalList.at(selRow);
+    ui->signalTree->uncheckSignal(sig);
 }
 
 void SignalViewerWindow::removeSignal(DBC_SIGNAL *sig)
@@ -174,6 +174,7 @@ void SignalViewerWindow::clearSignalsTable(bool askForConfirmation)
         }
     }
 
+    ui->signalTree->uncheckAll();
     signalList.clear();
     ui->tableViewer->setRowCount(0);
 }
@@ -301,7 +302,7 @@ void SignalViewerWindow::loadDefinitions(bool append)
 
             for (int i=0; i<loadedSignals.count(); i++)
             {
-                addSignal(loadedSignals[i]);
+                ui->signalTree->checkSignal(loadedSignals[i]);
             }
         }
     }

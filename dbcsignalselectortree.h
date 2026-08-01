@@ -5,6 +5,7 @@
 #include <QStandardItemModel>
 #include <QSortFilterProxyModel>
 #include <QIcon>
+#include <QHash>
 #include "dbc/dbchandler.h"
 
 namespace Ui {
@@ -26,6 +27,12 @@ public:
     
     // For single select mode
     DBC_SIGNAL* getSelectedSignal() const;
+    void setSelectedSignal(DBC_SIGNAL* sig);
+
+    // For multi select mode
+    void checkSignal(DBC_SIGNAL *sig);
+    void uncheckSignal(DBC_SIGNAL *sig);
+    void uncheckAll();
 
 signals:
     void signalChecked(DBC_SIGNAL *sig);
@@ -48,6 +55,8 @@ private:
     QIcon signalIcon;
     QIcon multiplexedSignalIcon;
     QIcon multiplexorSignalIcon;
+
+    QHash<DBC_SIGNAL*, QStandardItem*> m_signalItemMap;
 
     void populateTree();
     void updateParentCheckState(QStandardItem *parentItem);

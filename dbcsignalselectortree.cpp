@@ -77,6 +77,19 @@ DBC_SIGNAL* DbcSignalSelectorTree::getSelectedSignal() const
     return nullptr;
 }
 
+void DbcSignalSelectorTree::setSelectedSignal(DBC_SIGNAL *sig)
+{
+    if (m_signalItemMap.contains(sig)) {
+        QStandardItem *item = m_signalItemMap[sig];
+        QModelIndex sourceIndex = item->index();
+        QModelIndex proxyIndex = m_proxyModel->mapFromSource(sourceIndex);
+        if (proxyIndex.isValid()) {
+            ui->treeView->setCurrentIndex(proxyIndex);
+            ui->treeView->scrollTo(proxyIndex);
+        }
+    }
+}
+
 void DbcSignalSelectorTree::onSearchTextChanged(const QString &text)
 {
     m_proxyModel->setFilterWildcard("*" + text + "*");
@@ -170,10 +183,51 @@ void DbcSignalSelectorTree::updateParentCheckState(QStandardItem *parentItem)
     }
 }
 
+void DbcSignalSelectorTree::checkSignal(DBC_SIGNAL *sig)
+{
+    if (m_signalItemMap.contains(sig)) {
+        QStandardItem *item = m_signalItemMap[sig];
+        if (item->checkState() != Qt::Checked) {
+            item->setCheckState(Qt::Checked);
+        }
+    }
+}
+
+void DbcSignalSelectorTree::uncheckSignal(DBC_SIGNAL *sig)
+{
+    if (m_signalItemMap.contains(sig)) {
+        QStandardItem *item = m_signalItemMap[sig];
+        if (item->checkState() != Qt::Unchecked) {
+            item->setCheckState(Qt::Unchecked);
+        }
+    }
+}
+
+void DbcSignalSelectorTree::uncheckAll()
+{
+    m_isUpdatingState = true;
+    for (QStandardItem *item : m_signalItemMap.values()) {
+        item->setCheckState(Qt::Unchecked);
+    }
+    // Update parents manually since we suppressed events
+    for (int i = 0; i < m_model->rowCount(); ++i) {
+        QStandardItem *fileItem = m_model->item(i);
+        for (int j = 0; j < fileItem->rowCount(); ++j) {
+            QStandardItem *nodeItem = fileItem->child(j);
+            for (int k = 0; k < nodeItem->rowCount(); ++k) {
+                QStandardItem *msgItem = nodeItem->child(k);
+                updateParentCheckState(msgItem);
+            }
+        }
+    }
+    m_isUpdatingState = false;
+}
+
 void DbcSignalSelectorTree::populateTree()
 {
     m_isUpdatingState = true;
     m_model->clear();
+    m_signalItemMap.clear();
     
     DBCHandler *handler = DBCHandler::getReference();
     if (!handler) {
@@ -192,31 +246,30 @@ void DbcSignalSelectorTree::populateTree()
             fileItem->setCheckState(Qt::Unchecked);
         }
         
-        // Ensure there is a default node if necessary
-        if (file->findNodeByName("Vector__XXX") == nullptr)
-        {
-            DBC_NODE newNode;
-            newNode.name = "Vector__XXX";
-            newNode.comment = "Default node if no other node is specified";
-            file->dbc_nodes.append(newNode);
+        QList<QString> nodesToProcess;
+        for (int n = 0; n < file->dbc_nodes.count(); ++n) {
+            nodesToProcess.append(file->dbc_nodes[n].name);
+        }
+        if (!nodesToProcess.contains("Vector__XXX")) {
+            nodesToProcess.append("Vector__XXX");
         }
         
-        for (int n = 0; n < file->dbc_nodes.count(); ++n) {
-            DBC_NODE *node = &file->dbc_nodes[n];
+        for (const QString &nodeName : nodesToProcess) {
+            QStandardItem *nodeItem = nullptr;
             
-            QStandardItem *nodeItem = new QStandardItem(node->name);
-            nodeItem->setIcon(nodeIcon);
-            nodeItem->setEditable(false);
-            if (m_mode == MultiSelect) {
-                nodeItem->setCheckable(true);
-                nodeItem->setCheckState(Qt::Unchecked);
-            }
-            
-            bool hasMessages = false;
             for (int m = 0; m < file->messageHandler->getCount(); ++m) {
                 DBC_MESSAGE *msg = file->messageHandler->findMsgByIdx(m);
-                if (msg->sender->name == node->name) {
-                    hasMessages = true;
+                if (msg->sender->name == nodeName) {
+                    if (!nodeItem) {
+                        nodeItem = new QStandardItem(nodeName);
+                        nodeItem->setIcon(nodeIcon);
+                        nodeItem->setEditable(false);
+                        if (m_mode == MultiSelect) {
+                            nodeItem->setCheckable(true);
+                            nodeItem->setCheckState(Qt::Unchecked);
+                        }
+                    }
+                    
                     QString msgInfo = Utility::formatCANID(msg->ID) + " " + msg->name;
                     QStandardItem *msgItem = new QStandardItem(msgInfo);
                     msgItem->setIcon(messageIcon);
@@ -230,7 +283,6 @@ void DbcSignalSelectorTree::populateTree()
                         DBC_SIGNAL *sig = msg->sigHandler->findSignalByIdx(s);
                         QString sigInfo = sig->name;
                         
-                        // We will keep it flat like the combobox was, no recursion for simplicity
                         QStandardItem *sigItem = new QStandardItem(sigInfo);
                         
                         if (sig->isMultiplexor) sigItem->setIcon(multiplexorSignalIcon);
@@ -243,13 +295,14 @@ void DbcSignalSelectorTree::populateTree()
                             sigItem->setCheckState(Qt::Unchecked);
                         }
                         sigItem->setData(QVariant::fromValue(sig), Qt::UserRole);
+                        m_signalItemMap[sig] = sigItem;
                         msgItem->appendRow(sigItem);
                     }
                     nodeItem->appendRow(msgItem);
                 }
             }
             
-            if (hasMessages) {
+            if (nodeItem) {
                 fileItem->appendRow(nodeItem);
             }
         }

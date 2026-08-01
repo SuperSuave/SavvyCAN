@@ -208,9 +208,10 @@ void NewGraphDialog::setParams(GraphParams &params)
     assocSignal = params.associatedSignal;
 
     // Signal selection could be updated here by passing assocSignal to the tree
+    if (assocSignal) {
+        ui->signalTree->setSelectedSignal(assocSignal);
+    }
 
-
-    //loadSignals(0);
     drawBitfield();
     checkSignalAgreement();
 }
