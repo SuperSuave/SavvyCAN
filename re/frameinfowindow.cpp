@@ -292,6 +292,19 @@ void FrameInfoWindow::showEvent(QShowEvent* event)
     }
 }
 
+void FrameInfoWindow::selectID(QString idStr)
+{
+    // Make sure we have the latest list
+    refreshIDList();
+    for (int i = 0; i < ui->listFrameID->count(); ++i) {
+        if (FilterUtility::getId(ui->listFrameID->item(i)).compare(idStr, Qt::CaseInsensitive) == 0) {
+            ui->listFrameID->setCurrentRow(i);
+            updateDetailsWindow(FilterUtility::getId(ui->listFrameID->item(i)));
+            break;
+        }
+    }
+}
+
 bool FrameInfoWindow::eventFilter(QObject *obj, QEvent *event)
 {
     if (event->type() == QEvent::Resize)
@@ -875,6 +888,39 @@ void FrameInfoWindow::updateDetailsWindow(QString newID)
             tempItem = new QTreeWidgetItem();
             tempItem->setText(0, tr("Range: ") + Utility::formatNumber((unsigned int)minData[c]) + tr(" to ") + Utility::formatNumber((unsigned int)maxData[c]));
             dataBase->addChild(tempItem);
+
+            // Calculate byte classification for AI and user
+            QString classification;
+            if (minData[c] == maxData[c]) {
+                classification = "Constant";
+            } else {
+                int incCount = 0;
+                int decCount = 0;
+                int changes = 0;
+                for (int i = 1; i < byteGraphY[c].size(); i++) {
+                    int diff = (int)byteGraphY[c][i] - (int)byteGraphY[c][i-1];
+                    if (diff != 0) {
+                        changes++;
+                        if (diff == 1 || diff < -10) incCount++;
+                        else if (diff == -1 || diff > 10) decCount++;
+                    }
+                }
+                if (changes == 0) {
+                    classification = "Constant";
+                } else if (incCount >= changes * 0.8) {
+                    classification = "Counter (Incrementing)";
+                } else if (decCount >= changes * 0.8) {
+                    classification = "Counter (Decrementing)";
+                } else if (changes > byteGraphY[c].size() * 0.5) {
+                    classification = "Noisy / Checksum / High Variance";
+                } else {
+                    classification = "Status / State Machine / Low Variance";
+                }
+            }
+            tempItem = new QTreeWidgetItem();
+            tempItem->setText(0, tr("AI Classification: ") + classification);
+            dataBase->addChild(tempItem);
+
             histBase->setText(0, tr("Histogram"));
             dataBase->addChild(histBase);
 
@@ -1072,6 +1118,12 @@ void FrameInfoWindow::dumpNode(QTreeWidgetItem* item, QFile *file, int indent)
     for( int i = 0; i < item->childCount(); ++i )
         dumpNode( item->child(i), file, indent + 1 );
 }
+
+QTreeWidget* FrameInfoWindow::getDetailsTree() const
+{
+    return ui->treeDetails;
+}
+
 
 
 void FrameInfoWindow::applyPlotTheme(QCustomPlot *plot)

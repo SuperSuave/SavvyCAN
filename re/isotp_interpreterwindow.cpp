@@ -246,6 +246,12 @@ void ISOTP_InterpreterWindow::saveList()
     }
 }
 
+void ISOTP_InterpreterWindow::sendISOTPFrame(int bus, int id, QByteArray data)
+{
+    if (decoder) {
+        decoder->sendISOTPFrame(bus, id, data);
+    }
+}
 
 void ISOTP_InterpreterWindow::useExtendedAddressing(bool checked)
 {
@@ -362,3 +368,27 @@ void ISOTP_InterpreterWindow::newISOMessage(ISOTP_MESSAGE msg)
     }
     ui->tableIsoFrames->setItem(rowNum, 5, new QTableWidgetItem(tempString));
 }
+
+void ISOTP_InterpreterWindow::openAndConfigure(int rxId)
+{
+    if (!isVisible()) show();
+    filterNone();
+    if (idFilters.find(rxId) == idFilters.end())
+    {
+        idFilters.insert(rxId, true);
+        FilterUtility::createCheckableFilterItem(rxId, true, ui->listFilter);
+    }
+    else
+    {
+        idFilters[rxId] = true;
+        for(int i = 0; i < ui->listFilter->count(); ++i)
+        {
+            if (FilterUtility::getIdAsInt(ui->listFilter->item(i)) == rxId)
+            {
+                ui->listFilter->item(i)->setCheckState(Qt::Checked);
+                break;
+            }
+        }
+    }
+}
+

@@ -44,6 +44,9 @@ of this program. It can load and save in several formats:
 11. PCAN Viewer (Read Only)
 12. Wireshark socketcan PCAP file (Read only)
 
+## AI Co-pilot (MCP Server)
+SavvyLens includes a built-in Model Context Protocol (MCP) server to allow AI assistants (like Claude Desktop or Cline) to directly interact with your CANbus data, DBC files, and analysis windows. See [MCP_SERVER.md](MCP_SERVER.md) for setup instructions.
+
 ## Dependencies
 
 Now this code does not depend on anything other than what is in the source tree or available

@@ -61,6 +61,7 @@ DBCLoadSaveWindow::DBCLoadSaveWindow(const QVector<CANFrame> *frames, QWidget *p
 
     connect(ui->btnEdit, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::editFile);
     connect(ui->btnLoad, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::loadFile);
+    connect(ui->btnRefresh, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::refreshFile);
     connect(ui->btnMoveDown, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::moveDown);
     connect(ui->btnMoveUp, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::moveUp);
     connect(ui->btnRemove, &QAbstractButton::clicked, this, &DBCLoadSaveWindow::removeFile);
@@ -219,6 +220,32 @@ void DBCLoadSaveWindow::loadFile()
         inhibitCellProcessing=false;
 
         updateSettings();
+    }
+}
+
+void DBCLoadSaveWindow::refreshFile()
+{
+    int idx = ui->tableFiles->currentRow();
+    if (idx < 0) return;
+    
+    DBCFile *file = dbcHandler->getFileByIdx(idx);
+    if (!file) return;
+
+    bool force = false;
+    if (file->getDirtyFlag()) {
+        QMessageBox::StandardButton res = QMessageBox::question(this, "Unsaved changes", "The DBC file has unsaved changes. Do you want to discard them and refresh from disk?", QMessageBox::Yes | QMessageBox::No);
+        if (res == QMessageBox::Yes) {
+            force = true;
+        } else {
+            return;
+        }
+    }
+    
+    if (dbcHandler->refreshDBCFile(idx, force)) {
+        // Let's add a status message, maybe a simple QMessageBox or update UI if needed.
+        QMessageBox::information(this, "Refresh", "File refreshed successfully.");
+    } else {
+        QMessageBox::warning(this, "Refresh", "Could not refresh file.");
     }
 }
 

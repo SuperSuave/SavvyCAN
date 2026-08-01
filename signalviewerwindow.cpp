@@ -399,3 +399,25 @@ void SignalViewerWindow::loadDefinitions(bool append)
         }
     }
 }
+
+void SignalViewerWindow::openForSignal(int messageId, QString signalName)
+{
+    if (!isVisible()) show();
+    
+    if (dbcHandler == nullptr) return;
+    
+    DBC_MESSAGE *msg = dbcHandler->findMessage(messageId);
+    if (!msg) return;
+    
+    DBC_SIGNAL *sig = msg->sigHandler->findSignalByName(signalName);
+    if (!sig) return;
+    
+    // Check if it's already in the list to avoid duplicates
+    for (int i = 0; i < signalList.count(); i++) {
+        if (signalList.at(i) == sig) {
+            return;
+        }
+    }
+    
+    addSignal(sig);
+}

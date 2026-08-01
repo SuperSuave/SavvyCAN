@@ -26,6 +26,8 @@ public:
     explicit FrameInfoWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FrameInfoWindow();
     void showEvent(QShowEvent*);
+    void selectID(QString idStr);
+    QTreeWidget* getDetailsTree() const;
 
 private slots:
     void updateDetailsWindow(QString);
@@ -68,6 +70,7 @@ private:
     void readSettings();
     void writeSettings();
     void dumpNode(QTreeWidgetItem* item, QFile *file, int indent);
+
 };
 
 #endif // FRAMEINFOWINDOW_H

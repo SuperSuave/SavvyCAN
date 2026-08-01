@@ -5,6 +5,7 @@
 #include "can_structs.h"
 #include "dbc/dbchandler.h"
 
+
 #include <QDialog>
 
 namespace Ui {
@@ -59,6 +60,9 @@ public:
 
 public slots:
     void createGraph(GraphParams &params, bool createGraphParam = true);
+    void openForSignal(int messageId, QString signalName);
+    const QList<GraphParams>& getGraphParamsList() const { return graphParams; }
+    QString takeScreenshot(QString filepath);
 
 private slots:
     void titleDoubleClick(QMouseEvent *event, QCPTextElement *title);

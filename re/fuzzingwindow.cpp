@@ -435,6 +435,34 @@ void FuzzingWindow::refreshIDList()
     ui->listID->sortItems();
 }
 
+void FuzzingWindow::configureFuzzer(int startId, int endId, int intervalMs, int fuzzType)
+{
+    ui->txtStartID->setText(QString::number(startId, 16));
+    ui->txtEndID->setText(QString::number(endId, 16));
+    ui->spinTiming->setValue(intervalMs);
+    
+    ui->rbRangeIDSel->setChecked(true);
+    
+    if (fuzzType == 0) ui->rbSequentialBits->setChecked(true);
+    else if (fuzzType == 1) ui->rbSweep->setChecked(true);
+    else if (fuzzType == 2) ui->rbRandomBits->setChecked(true);
+}
+
+void FuzzingWindow::startFuzzing()
+{
+    if (!currentlyFuzzing) toggleFuzzing();
+}
+
+void FuzzingWindow::stopFuzzing()
+{
+    if (currentlyFuzzing) toggleFuzzing();
+}
+
+bool FuzzingWindow::isFuzzingActive() const
+{
+    return currentlyFuzzing;
+}
+
 void FuzzingWindow::idListChanged(QListWidgetItem *item)
 {
     int id = FilterUtility::getIdAsInt(item);

@@ -83,7 +83,7 @@ public:
 
     void handleDroppedFile(const QString &filename);
 
-private slots:
+public slots:
     void handleLoadFile();
     void handleSaveFile();
     void handleSaveFilteredFile();
@@ -166,8 +166,21 @@ private slots:
     void bookmarkSelectedEventCorrelationCandidate();
     void refreshAnalysisTabsForCurrentSelection();
 
-
 public slots:
+    void analyzeFrameData(QString frameId);
+    void updateCopilotStatus(int count);
+    FrameInfoWindow* getFrameInfoWindow();
+    SnifferWindow* getSnifferWindow() const;
+    BisectWindow* getBisectWindow() const;
+    FlowViewWindow* getFlowViewWindow() const;
+    FuzzingWindow* getFuzzingWindow() const;
+    UDSScanWindow* getUDSScanWindow() const;
+    ISOTP_InterpreterWindow* getISOTPWindow() const;
+    FrameSenderWindow* getFrameSenderWindow() const;
+    SignalViewerWindow* getSignalViewerWindow() const;
+    GraphingWindow* getGraphingWindow() const;
+    FramePlaybackWindow* getPlaybackWindow() const;
+    ConnectionWindow* getConnectionWindow() const;
     void gotFrames(int);
     void updateSettings();
     void readUpdateableSettings();
@@ -195,6 +208,8 @@ private:
     QByteArray inputBuffer;
     QTimer updateTimer;
     QElapsedTimer *elapsedTime;
+    QLabel *copilotStatusLabel;
+    FrameSenderObject *frameSender;
     int framesPerSec;
     int rxFrames;
     bool inhibitFilterUpdate;
@@ -340,6 +355,9 @@ private:
     void addFrameToDisplay(CANFrame &, bool);
     void updateFileStatus();
     void closeEvent(QCloseEvent *event);
+    void onDbcNeedsRefresh(int idx);
+
+private slots:
     void killEmAll();
     void killWindow(QDialog *win);
     void readSettings();

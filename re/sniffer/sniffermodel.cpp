@@ -1,9 +1,13 @@
 #include <QDebug>
 #include <Qt>
 #include <QApplication>
+#include <QColor>
+#include <QJsonObject>
+#include <QJsonArray>
 #include "sniffermodel.h"
 #include "snifferwindow.h"
 #include "SnifferDelegate.h"
+#include "themes/thememanager.h"
 
 SnifferModel::SnifferModel(QObject *parent)
     : QAbstractItemModel(parent),
@@ -53,7 +57,7 @@ QVariant SnifferModel::data(const QModelIndex &index, int role) const
         return QVariant();
 
     SnifferItem *item = static_cast<SnifferItem*>(index.internalPointer());
-    if(!item) QVariant();
+    if(!item) return QVariant();
 
     int col = index.column();
 
@@ -313,6 +317,8 @@ void SnifferModel::filter(fltType pType, int pId)
 /***********************************************/
 /**********         slots       ****************/
 /***********************************************/
+
+
 
 void SnifferModel::update(CANConnection*, QVector<CANFrame>& pFrames)
 {

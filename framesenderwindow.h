@@ -38,6 +38,11 @@ public:
     explicit FrameSenderWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~FrameSenderWindow();
 
+    void addSequence(int bus, int id, QByteArray data, int intervalMs);
+    void startAll();
+    void stopAll();
+    void clearAll();
+
 private slots:
     void onCellChanged(int, int);
     void onCellDoubleTap(int, int);

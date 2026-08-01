@@ -24,6 +24,7 @@ QMAKE_INFO_PLIST = Info.plist.template
 ICON = icons/SavvyLens.icns
 
 SOURCES += main.cpp\
+    utils/logger.cpp \
     bookmarkmanager.cpp \
     bookmarkmanagerdialog.cpp \
     canbridgewindow.cpp \
@@ -113,9 +114,14 @@ SOURCES += main.cpp\
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
     pcaplite.cpp \
+    mcp/mcpserver.cpp \
+    mcp/mcptools_list.cpp \
+    mcp/mcptools_call.cpp
+
     re/bookmarkeventanalyzer.cpp
 
 HEADERS  += mainwindow.h \
+    utils/logger.h \
     bookmarkmanager.h \
     bookmarkmanagerdialog.h \
     can_structs.h \
@@ -216,6 +222,8 @@ HEADERS  += mainwindow.h \
     re/udsfirmwareuploaderwindow.h \
     filterutility.h \
     pcaplite.h \
+    mcp/mcpserver.h
+
     re/bookmarkeventanalyzer.h
 
 FORMS    += ui/candatagrid.ui \
@@ -261,10 +269,12 @@ RESOURCES += \
 
 win32-msvc* {
    LIBS += opengl32.lib
+   LIBS += Dbghelp.lib
 }
 
 win32-g++ {
    LIBS += libopengl32
+   LIBS += -ldbghelp
 }
 
 unix {

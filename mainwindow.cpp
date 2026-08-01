@@ -78,6 +78,14 @@ MainWindow *MainWindow::getReference()
     return selfRef;
 }
 
+void MainWindow::onDbcNeedsRefresh(int idx)
+{
+    DBCFile *file = dbcHandler->getFileByIdx(idx);
+    if (file) {
+        statusBar()->showMessage(tr("DBC Update Available (Unsaved Changes in %1)").arg(file->getFilename()), 10000);
+    }
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -147,6 +155,10 @@ MainWindow::MainWindow(QWidget *parent) :
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
 
+    copilotStatusLabel = new QLabel("AI: Disconnected");
+    copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    ui->statusBar->addPermanentWidget(copilotStatusLabel);
+
     readSettings();
 
     QHeaderView *verticalHeader = ui->canFramesView->verticalHeader();
@@ -192,6 +204,7 @@ MainWindow::MainWindow(QWidget *parent) :
     dbcComparatorWindow = nullptr;
     canBridgeWindow = nullptr;
     dbcHandler = DBCHandler::getReference();
+    connect(dbcHandler, &DBCHandler::fileNeedsRefresh, this, &MainWindow::onDbcNeedsRefresh);
     bDirty = false;
     inhibitFilterUpdate = false;
     rxFrames = 0;
@@ -1827,6 +1840,85 @@ void MainWindow::showFrameDataAnalysis()
             frameInfoWindow = new FrameInfoWindow(model->getFilteredListReference());
     }
     frameInfoWindow->show();
+}
+
+void MainWindow::analyzeFrameData(QString frameId)
+{
+    showFrameDataAnalysis();
+    if (frameInfoWindow) {
+        frameInfoWindow->selectID(frameId);
+    }
+}
+
+FrameInfoWindow* MainWindow::getFrameInfoWindow()
+{
+    return frameInfoWindow;
+}
+
+SnifferWindow* MainWindow::getSnifferWindow() const
+{
+    return snifferWindow;
+}
+
+BisectWindow* MainWindow::getBisectWindow() const
+{
+    return bisectWindow;
+}
+
+FlowViewWindow* MainWindow::getFlowViewWindow() const
+{
+    return flowViewWindow;
+}
+
+FuzzingWindow* MainWindow::getFuzzingWindow() const
+{
+    return fuzzingWindow;
+}
+
+UDSScanWindow* MainWindow::getUDSScanWindow() const
+{
+    return udsScanWindow;
+}
+
+ISOTP_InterpreterWindow* MainWindow::getISOTPWindow() const
+{
+    return isoWindow;
+}
+
+FrameSenderWindow* MainWindow::getFrameSenderWindow() const
+{
+    return frameSenderWindow;
+}
+
+SignalViewerWindow* MainWindow::getSignalViewerWindow() const
+{
+    return signalViewerWindow;
+}
+
+FramePlaybackWindow* MainWindow::getPlaybackWindow() const
+{
+    return playbackWindow;
+}
+
+ConnectionWindow* MainWindow::getConnectionWindow() const
+{
+    return connectionWindow;
+}
+
+GraphingWindow* MainWindow::getGraphingWindow() const
+{
+    return lastGraphingWindow;
+}
+
+void MainWindow::updateCopilotStatus(int count)
+{
+    if (count > 0) {
+        copilotStatusLabel->setText(QString("AI: %1 Connected").arg(count));
+        copilotStatusLabel->setStyleSheet("QLabel { color : #409cff; font-weight: bold; }");
+    } else {
+        copilotStatusLabel->setText("AI: Disconnected");
+        copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    }
 }
 
 void MainWindow::showISOInterpreterWindow()

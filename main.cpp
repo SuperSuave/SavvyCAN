@@ -10,6 +10,8 @@
 #include <QPalette>
 #include <QColor>
 #include <QFont>
+#include "mcp/mcpserver.h"
+#include "utils/logger.h"
 
 class SavvyLensApplication : public QApplication
 {
@@ -218,6 +220,9 @@ static void applyDarkPalette(QApplication &app)
 
 int main(int argc, char *argv[])
 {
+    // Initialize crash handler and Qt message logging
+    Logger::init();
+
 #ifdef QT_DEBUG
     //uncomment for verbose debug data in application output
     //qputenv("QT_FATAL_WARNINGS", "1");
@@ -225,6 +230,7 @@ int main(int argc, char *argv[])
 #endif
 
     SavvyLensApplication a(argc, argv);
+
 
     //Add a local path for Qt extensions, to allow for per-application extensions.
     a.addLibraryPath("plugins");
@@ -265,7 +271,18 @@ int main(int argc, char *argv[])
     ThemeManager::applyDarkTheme(a);
 
     a.mainWindow = new MainWindow();
+    
+    if (settings.value("MCP/Enable", true).toBool()) {
+        MCPServer *mcpServer = new MCPServer(&a);
+        QObject::connect(mcpServer, &MCPServer::clientCountChanged, a.mainWindow, &MainWindow::updateCopilotStatus);
+        mcpServer->start(settings.value("MCP/Port", "8888").toInt());
+    }
+    
     a.mainWindow->show();
+    
+    if (argc > 1) {
+        a.mainWindow->handleDroppedFile(QString(argv[1]));
+    }
 
     int retCode = a.exec();
 
