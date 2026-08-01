@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <execinfo.h>
 #include <unistd.h>
+#include <string.h>
 #endif
 
 // Global log file pointer
@@ -85,16 +86,38 @@ LONG WINAPI unhandledExceptionHandler(EXCEPTION_POINTERS *exceptionInfo)
 void posixSignalHandler(int sig)
 {
     if (g_logFile && g_logFile->isOpen()) {
-        QTextStream out(g_logFile);
-        out << "\n\n=== APPLICATION CRASHED ===\n";
-        out << "Caught signal: " << sig << "\n";
-        out << "Stack Trace:\n";
-        out.flush();
+        int fd = g_logFile->handle();
+        
+        const char *msg1 = "\n\n=== APPLICATION CRASHED ===\nCaught signal: ";
+        write(fd, msg1, strlen(msg1));
+        
+        // Simple async-signal-safe int to string
+        char sigStr[16];
+        int idx = 0;
+        int temp = sig;
+        if (temp == 0) {
+            sigStr[idx++] = '0';
+        } else {
+            char rev[16];
+            int r = 0;
+            while (temp > 0) {
+                rev[r++] = '0' + (temp % 10);
+                temp /= 10;
+            }
+            while (r > 0) {
+                sigStr[idx++] = rev[--r];
+            }
+        }
+        sigStr[idx++] = '\n';
+        write(fd, sigStr, idx);
+        
+        const char *msg2 = "Stack Trace:\n";
+        write(fd, msg2, strlen(msg2));
         
         void *array[50];
         size_t size = backtrace(array, 50);
         // Write backtrace directly to the file descriptor
-        backtrace_symbols_fd(array, size, g_logFile->handle());
+        backtrace_symbols_fd(array, size, fd);
     }
     
     // Reset signal to default and re-raise to actually terminate

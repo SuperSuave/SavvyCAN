@@ -63,6 +63,8 @@ void MCPServer::onReadyRead()
         QJsonDocument doc = QJsonDocument::fromJson(line, &err);
         if (err.error == QJsonParseError::NoError && doc.isObject()) {
             processMessage(doc.object(), client);
+        } else {
+            qDebug() << "MCP Server JSON Parse Error:" << err.errorString() << "on line:" << line;
         }
     }
 }
