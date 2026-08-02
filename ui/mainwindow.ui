@@ -46,7 +46,7 @@
            <widget class="QTableView" name="canFramesView">
             <property name="maximumSize">
              <size>
-              <width>710</width>
+              <width>775</width>
               <height>16777215</height>
              </size>
             </property>
@@ -66,7 +66,7 @@
              <bool>false</bool>
             </property>
             <attribute name="horizontalHeaderStretchLastSection">
-             <bool>false</bool>
+             <bool>true</bool>
             </attribute>
             <attribute name="verticalHeaderStretchLastSection">
              <bool>true</bool>
@@ -76,7 +76,7 @@
           <item>
            <layout class="QHBoxLayout" name="layoutFiltering" stretch="0,0">
             <property name="sizeConstraint">
-             <enum>QLayout::SetFixedSize</enum>
+             <enum>QLayout::SetDefaultConstraint</enum>
             </property>
             <property name="topMargin">
              <number>0</number>
@@ -306,7 +306,7 @@
                   </property>
                   <property name="sizeHint" stdset="0">
                    <size>
-                    <width>40</width>
+                    <width>5</width>
                     <height>20</height>
                    </size>
                   </property>

@@ -512,7 +512,7 @@ void MainWindow::readSettings()
 
 if (settings.value("Main/SaveRestorePositions", false).toBool())
 {
-    resize(settings.value("Main/WindowSize", QSize(910, 800)).toSize());
+    resize(settings.value("Main/WindowSize", QSize(1200, 850)).toSize());
     move(Utility::constrainedWindowPos(
         settings.value("Main/WindowPos", QPoint(100, 100)).toPoint()));
 
@@ -533,16 +533,16 @@ if (settings.value("Main/SaveRestorePositions", false).toBool())
     ui->canFramesView->setColumnWidth(int(Column::ASCII),
         settings.value("Main/AsciiColumn", 50).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::Data),
-        settings.value("Main/DataColumn", 125).toUInt());
+        settings.value("Main/DataColumn", 150).toUInt());
     ui->canFramesView->setColumnWidth(int(Column::Idx),
         settings.value("Main/OGIDColumn", 90).toUInt());
 }
 else
 {
-    resize(QSize(800, 850));
+    resize(QSize(1200, 800));
     move(Utility::constrainedWindowPos(QPoint(100, 100)));
 
-    ui->canFramesView->setColumnWidth(int(Column::TimeStamp), 725);
+    ui->canFramesView->setColumnWidth(int(Column::TimeStamp), 125);
     ui->canFramesView->setColumnWidth(int(Column::FrameId), 70);
     ui->canFramesView->setColumnWidth(int(Column::Extended), 40);
     ui->canFramesView->setColumnWidth(int(Column::Remote), 40);
@@ -550,7 +550,7 @@ else
     ui->canFramesView->setColumnWidth(int(Column::Bus), 40);
     ui->canFramesView->setColumnWidth(int(Column::Length), 40);
     ui->canFramesView->setColumnWidth(int(Column::ASCII), 50);
-    ui->canFramesView->setColumnWidth(int(Column::Data), 125);
+    ui->canFramesView->setColumnWidth(int(Column::Data), 150);
     ui->canFramesView->setColumnWidth(int(Column::Idx), 90);
 }
 
