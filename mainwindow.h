@@ -367,8 +367,6 @@ private slots:
     void disableAutoRowExpansion();
     int64_t selectedFrameTimestamp();
     void scrollToNearestTimestamp(int64_t timestamp);
-    void createSenderRow();
-    void processSenderCellChange(int line, int col);
 };
 
 #endif // MAINWINDOW_H
