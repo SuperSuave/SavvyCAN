@@ -22,6 +22,7 @@ public:
 private slots:
     void loadFile();
     void loadJSON();
+    void refreshFile();
     void saveFile();
     void removeFile();
     void moveUp();

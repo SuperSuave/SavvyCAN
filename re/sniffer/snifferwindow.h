@@ -3,6 +3,7 @@
 
 #include <QDialog>
 #include <QListWidgetItem>
+
 #include "sniffermodel.h"
 #include "SnifferDelegate.h"
 
@@ -45,6 +46,7 @@ public slots:
     void fltAll();
     void fltNone();
     void itemChanged(QListWidgetItem*);
+    const SnifferModel* getModel() const { return &mModel; }
 
 private:
     void filter(bool pFilter);

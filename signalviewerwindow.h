@@ -16,12 +16,11 @@ public:
     explicit SignalViewerWindow(const QVector<CANFrame> *frames, QWidget *parent = 0);
     ~SignalViewerWindow();
 
+    void openForSignal(int messageId, QString signalName);
+
 private slots:
-    void loadNodes();
-    void loadMessages(int idx);
-    void loadSignals(int idx);
-    void addSignal();
     void addSignal(DBC_SIGNAL *sig);
+    void removeSignal(DBC_SIGNAL *sig);
     void removeSelectedSignal();
     void updatedFrames(int);
     void saveSignalsFile();

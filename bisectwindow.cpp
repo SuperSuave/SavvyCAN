@@ -6,6 +6,7 @@
 #include "helpwindow.h"
 
 #include <QDebug>
+#include <QJsonObject>
 #include <algorithm>
 
 BisectWindow::BisectWindow(const QVector<CANFrame> *frames, QWidget *parent) :
@@ -39,6 +40,16 @@ BisectWindow::~BisectWindow()
 {
     removeEventFilter(this);
     delete ui;
+}
+
+int BisectWindow::getMainFrameCount() const
+{
+    return modelFrames ? modelFrames->count() : 0;
+}
+
+int BisectWindow::getSplitFrameCount() const
+{
+    return splitFrames.count();
 }
 
 void BisectWindow::showEvent(QShowEvent* event)

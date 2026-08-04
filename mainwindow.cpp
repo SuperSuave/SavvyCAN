@@ -31,6 +31,9 @@
 #include "filterutility.h"
 #include "framebytedatadelegate.h"
 
+
+#include <QSortFilterProxyModel>
+#include <limits>
 /*
 Some notes on things I'd like to put into the program but haven't put on github (yet)
 
@@ -73,6 +76,14 @@ MainWindow *MainWindow::selfRef = nullptr;
 MainWindow *MainWindow::getReference()
 {
     return selfRef;
+}
+
+void MainWindow::onDbcNeedsRefresh(int idx)
+{
+    DBCFile *file = dbcHandler->getFileByIdx(idx);
+    if (file) {
+        statusBar()->showMessage(tr("DBC Update Available (Unsaved Changes in %1)").arg(file->getFilename()), 10000);
+    }
 }
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -144,6 +155,10 @@ MainWindow::MainWindow(QWidget *parent) :
     settingsDialog = new MainSettingsDialog(); //instantiate the settings dialog so it can initialize settings if this is the first run or the config file was deleted.
     settingsDialog->updateSettings(); //write out all the settings. If this is the first run it'll write defaults out.
 
+    copilotStatusLabel = new QLabel("AI: Disconnected");
+    copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    ui->statusBar->addPermanentWidget(copilotStatusLabel);
+
     readSettings();
 
     QHeaderView *verticalHeader = ui->canFramesView->verticalHeader();
@@ -189,6 +204,7 @@ MainWindow::MainWindow(QWidget *parent) :
     dbcComparatorWindow = nullptr;
     canBridgeWindow = nullptr;
     dbcHandler = DBCHandler::getReference();
+    connect(dbcHandler, &DBCHandler::fileNeedsRefresh, this, &MainWindow::onDbcNeedsRefresh);
     bDirty = false;
     inhibitFilterUpdate = false;
     rxFrames = 0;
@@ -707,6 +723,41 @@ void MainWindow::expandAllRows()
     }
 }
 
+int64_t MainWindow::selectedFrameTimestamp()
+{
+    QModelIndex proxyIdx = ui->canFramesView->currentIndex();
+    if (!proxyIdx.isValid()) return -1;
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    int row = proxy ? proxy->mapToSource(proxyIdx).row() : proxyIdx.row();
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (row < 0 || row >= filtered->count()) return -1;
+    const CANFrame &f = filtered->at(row);
+    return f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+}
+
+void MainWindow::scrollToNearestTimestamp(int64_t timestamp)
+{
+    const QVector<CANFrame> *filtered = model->getFilteredListReference();
+    if (timestamp < 0 || filtered->isEmpty()) return;
+    int lo = 0, hi = filtered->count() - 1, best = 0;
+    int64_t bestDiff = std::numeric_limits<int64_t>::max();
+    while (lo <= hi)
+    {
+        int mid = (lo + hi) / 2;
+        const CANFrame &f = filtered->at(mid);
+        int64_t ts = f.timeStamp().seconds() * 1000000LL + f.timeStamp().microSeconds();
+        int64_t diff = qAbs(ts - timestamp);
+        if (diff < bestDiff) { bestDiff = diff; best = mid; }
+        if (ts < timestamp) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    QSortFilterProxyModel *proxy = qobject_cast<QSortFilterProxyModel*>(ui->canFramesView->model());
+    QModelIndex sourceIdx = model->index(best, 0);
+    QModelIndex viewIdx = proxy ? proxy->mapFromSource(sourceIdx) : sourceIdx;
+    ui->canFramesView->setCurrentIndex(viewIdx);
+    ui->canFramesView->scrollTo(viewIdx, QAbstractItemView::PositionAtCenter);
+}
+
 void MainWindow::manageRowExpansion()
 {
     int numRows = ui->canFramesView->model()->rowCount();
@@ -1002,30 +1053,26 @@ void MainWindow::updateFilterList()
 void MainWindow::filterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
 void MainWindow::busFilterListItemChanged(QListWidgetItem *item)
 {
     if (inhibitFilterUpdate) return;
-    //qDebug() << item->text();
 
-    // strip away possible filter label
     int ID = FilterUtility::getIdAsInt(item);
-    bool isSet = false;
-    if (item->checkState() == Qt::Checked) isSet = true;
+    bool isSet = (item->checkState() == Qt::Checked);
 
+    int64_t savedTs = selectedFrameTimestamp();
     model->setBusFilterState(ID, isSet);
-
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -1033,14 +1080,14 @@ void MainWindow::filterSetAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Checked);
-    }
     inhibitFilterUpdate = false;
-    model->setAllFilters(true);
     if (ui->frameFilterSearch)
         ui->frameFilterSearch->clear();
 
+    int64_t savedTs = selectedFrameTimestamp();
+    model->setAllFilters(true);
+    scrollToNearestTimestamp(savedTs);
     manageRowExpansion();
 }
 
@@ -1048,9 +1095,7 @@ void MainWindow::filterClearAll()
 {
     inhibitFilterUpdate = true;
     for (int i = 0; i < ui->listFilters->count(); i++)
-    {
         ui->listFilters->item(i)->setCheckState(Qt::Unchecked);
-    }
     inhibitFilterUpdate = false;
     model->setAllFilters(false);
     if (ui->frameFilterSearch)
@@ -1198,6 +1243,7 @@ void MainWindow::clearFrames()
 void MainWindow::normalizeTiming()
 {
     model->normalizeTiming();
+    model->setTimeStyle(TS_SECONDS);
     emit framesUpdated(-2); //claim an all new set of frames because every frame was updated.
 }
 
@@ -1794,6 +1840,85 @@ void MainWindow::showFrameDataAnalysis()
             frameInfoWindow = new FrameInfoWindow(model->getFilteredListReference());
     }
     frameInfoWindow->show();
+}
+
+void MainWindow::analyzeFrameData(QString frameId)
+{
+    showFrameDataAnalysis();
+    if (frameInfoWindow) {
+        frameInfoWindow->selectID(frameId);
+    }
+}
+
+FrameInfoWindow* MainWindow::getFrameInfoWindow()
+{
+    return frameInfoWindow;
+}
+
+SnifferWindow* MainWindow::getSnifferWindow() const
+{
+    return snifferWindow;
+}
+
+BisectWindow* MainWindow::getBisectWindow() const
+{
+    return bisectWindow;
+}
+
+FlowViewWindow* MainWindow::getFlowViewWindow() const
+{
+    return flowViewWindow;
+}
+
+FuzzingWindow* MainWindow::getFuzzingWindow() const
+{
+    return fuzzingWindow;
+}
+
+UDSScanWindow* MainWindow::getUDSScanWindow() const
+{
+    return udsScanWindow;
+}
+
+ISOTP_InterpreterWindow* MainWindow::getISOTPWindow() const
+{
+    return isoWindow;
+}
+
+FrameSenderWindow* MainWindow::getFrameSenderWindow() const
+{
+    return frameSenderWindow;
+}
+
+SignalViewerWindow* MainWindow::getSignalViewerWindow() const
+{
+    return signalViewerWindow;
+}
+
+FramePlaybackWindow* MainWindow::getPlaybackWindow() const
+{
+    return playbackWindow;
+}
+
+ConnectionWindow* MainWindow::getConnectionWindow() const
+{
+    return connectionWindow;
+}
+
+GraphingWindow* MainWindow::getGraphingWindow() const
+{
+    return lastGraphingWindow;
+}
+
+void MainWindow::updateCopilotStatus(int count)
+{
+    if (count > 0) {
+        copilotStatusLabel->setText(QString("AI: %1 Connected").arg(count));
+        copilotStatusLabel->setStyleSheet("QLabel { color : #409cff; font-weight: bold; }");
+    } else {
+        copilotStatusLabel->setText("AI: Disconnected");
+        copilotStatusLabel->setStyleSheet("QLabel { color : gray; }");
+    }
 }
 
 void MainWindow::showISOInterpreterWindow()

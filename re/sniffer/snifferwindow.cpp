@@ -199,6 +199,8 @@ void SnifferWindow::fltNone()
     filter(true);
 }
 
+
+
 void SnifferWindow::filter(bool pFilter)
 {
     mFilter = pFilter;

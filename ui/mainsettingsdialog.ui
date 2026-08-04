@@ -477,6 +477,32 @@
       </widget>
      </item>
      <item>
+      <widget class="QGroupBox" name="groupBox_mcp">
+       <property name="title">
+        <string>AI Co-pilot (MCP) Settings:</string>
+       </property>
+       <layout class="QFormLayout" name="formLayout_mcp">
+        <item row="0" column="0">
+         <widget class="QCheckBox" name="cbMcpEnable">
+          <property name="text">
+           <string>Enable MCP TCP Server</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="label_mcp_port">
+          <property name="text">
+           <string>TCP Port:</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QLineEdit" name="lineMcpPort"/>
+        </item>
+       </layout>
+      </widget>
+     </item>
+     <item>
       <widget class="QLabel" name="label_5">
        <property name="text">
         <string>Some settings will not take effect until the application is restarted</string>

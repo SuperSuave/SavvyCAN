@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+<?xml version='1.0' encoding='UTF-8'?>
 <ui version="4.0">
  <class>NewGraphDialog</class>
  <widget class="QDialog" name="NewGraphDialog">
@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>681</width>
-    <height>797</height>
+    <width>750</width>
+    <height>550</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -15,7 +15,7 @@
   </property>
   <layout class="QVBoxLayout" name="verticalLayout">
    <item>
-    <layout class="QHBoxLayout" name="horizontalLayout" stretch="3,1,2">
+    <layout class="QHBoxLayout" name="horizontalLayout" stretch="3,3,2">
      <item>
       <layout class="QFormLayout" name="formLayout">
        <item row="0" column="0">
@@ -26,7 +26,7 @@
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLineEdit" name="txtName"/>
+        <widget class="QLineEdit" name="txtName" />
        </item>
        <item row="1" column="0">
         <widget class="QLabel" name="label">
@@ -36,7 +36,7 @@
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QLineEdit" name="txtID"/>
+        <widget class="QLineEdit" name="txtID" />
        </item>
        <item row="2" column="0">
         <widget class="QLabel" name="label_2">
@@ -72,74 +72,7 @@
      </item>
      <item>
       <layout class="QVBoxLayout" name="verticalLayout_3">
-       <item>
-        <widget class="QLabel" name="label_11">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>Graph a DBC Signal:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_19">
-         <property name="text">
-          <string>Node:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="cbNodes"/>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_9">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>Message:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="cbMessages"/>
-       </item>
-       <item>
-        <widget class="QLabel" name="label_10">
-         <property name="sizePolicy">
-          <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-           <horstretch>0</horstretch>
-           <verstretch>0</verstretch>
-          </sizepolicy>
-         </property>
-         <property name="text">
-          <string>Signal:</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="QComboBox" name="cbSignals"/>
-       </item>
-       <item>
+       <item><widget class="DbcSignalSelectorTree" name="signalTree" native="true" /></item><item>
         <widget class="QPushButton" name="btnCopySignal">
          <property name="text">
           <string>Copy Signal Parameters</string>
@@ -155,22 +88,9 @@
           </font>
          </property>
          <property name="text">
-          <string/>
+          <string />
          </property>
         </widget>
-       </item>
-       <item>
-        <spacer name="verticalSpacer">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>30</height>
-          </size>
-         </property>
-        </spacer>
        </item>
       </layout>
      </item>
@@ -195,7 +115,7 @@
         </widget>
        </item>
        <item row="0" column="1">
-        <widget class="QLineEdit" name="txtDataLen"/>
+        <widget class="QLineEdit" name="txtDataLen" />
        </item>
        <item row="1" column="0">
         <widget class="QLabel" name="label_13">
@@ -221,7 +141,7 @@
        <item row="2" column="1">
         <widget class="QCheckBox" name="cbSigned">
          <property name="text">
-          <string/>
+          <string />
          </property>
         </widget>
        </item>
@@ -236,7 +156,7 @@
         </widget>
        </item>
        <item row="3" column="1">
-        <widget class="QLineEdit" name="txtMask"/>
+        <widget class="QLineEdit" name="txtMask" />
        </item>
        <item row="4" column="0">
         <widget class="QLabel" name="label_5">
@@ -246,7 +166,7 @@
         </widget>
        </item>
        <item row="4" column="1">
-        <widget class="QLineEdit" name="txtBias"/>
+        <widget class="QLineEdit" name="txtBias" />
        </item>
        <item row="5" column="0">
         <widget class="QLabel" name="label_6">
@@ -256,7 +176,7 @@
         </widget>
        </item>
        <item row="5" column="1">
-        <widget class="QLineEdit" name="txtScale"/>
+        <widget class="QLineEdit" name="txtScale" />
        </item>
        <item row="6" column="0">
         <widget class="QLabel" name="label_7">
@@ -266,7 +186,7 @@
         </widget>
        </item>
        <item row="6" column="1">
-        <widget class="QLineEdit" name="txtStride"/>
+        <widget class="QLineEdit" name="txtStride" />
        </item>
        <item row="7" column="0">
         <widget class="QLabel" name="label_18">
@@ -303,7 +223,7 @@
        <item row="0" column="1">
         <widget class="QCheckBox" name="cbOnlyPoints">
          <property name="text">
-          <string/>
+          <string />
          </property>
         </widget>
        </item>
@@ -315,7 +235,7 @@
         </widget>
        </item>
        <item row="1" column="1">
-        <widget class="QComboBox" name="coPointStyle"/>
+        <widget class="QComboBox" name="coPointStyle" />
        </item>
        <item row="2" column="0">
         <widget class="QLabel" name="label_15">
@@ -394,14 +314,12 @@
    <header>candatagrid.h</header>
    <container>1</container>
   </customwidget>
- </customwidgets>
+ <customwidget><class>DbcSignalSelectorTree</class><extends>QWidget</extends><header>dbcsignalselectortree.h</header><container>1</container></customwidget></customwidgets>
  <tabstops>
   <tabstop>txtName</tabstop>
   <tabstop>txtID</tabstop>
-  <tabstop>cbMessages</tabstop>
-  <tabstop>cbSignals</tabstop>
   <tabstop>btnCopySignal</tabstop>
  </tabstops>
- <resources/>
- <connections/>
+ <resources />
+ <connections />
 </ui>

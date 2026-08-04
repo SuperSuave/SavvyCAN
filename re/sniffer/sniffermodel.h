@@ -40,6 +40,7 @@ public:
     void refresh();
     void clear();
     void filter(fltType pType, int pId=0);
+    const QMap<unsigned int, SnifferItem*>& getMap() const { return mMap; }
     bool getNeverExpire();
     bool getFadeInactive();
     bool getMuteNotched();

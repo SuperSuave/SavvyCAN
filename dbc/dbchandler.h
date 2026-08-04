@@ -2,6 +2,7 @@
 #define DBCHANDLER_H
 
 #include <QObject>
+#include <QFileSystemWatcher>
 #include "dbc_classes.h"
 #include "can_structs.h"
 
@@ -137,8 +138,17 @@ public:
     DBCFile* loadJSONFile(QString);
     DBCFile* loadSecretCSVFile(QString);
     static DBCHandler *getReference();
+    bool refreshDBCFile(int idx, bool forceOverride = false);
+
+signals:
+    void fileUpdated(int idx);
+    void fileNeedsRefresh(int idx);
+
+public slots:
+    void onFileChangedOnDisk(const QString &path);
 
 private:
+    QFileSystemWatcher *fileWatcher;
     QList<DBCFile> loadedFiles;
 
     DBCHandler();
