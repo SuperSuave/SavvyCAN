@@ -117,8 +117,7 @@ SOURCES += main.cpp\
     dbcsignalselectortree.cpp
     mcp/mcpserver.cpp \
     mcp/mcptools_list.cpp \
-    mcp/mcptools_call.cpp
-
+    mcp/mcptools_call.cpp \
     re/bookmarkeventanalyzer.cpp
 
 HEADERS  += mainwindow.h \
@@ -223,9 +222,8 @@ HEADERS  += mainwindow.h \
     re/udsfirmwareuploaderwindow.h \
     filterutility.h \
     pcaplite.h \
-    dbcsignalselectortree.h
-    mcp/mcpserver.h
-
+    dbcsignalselectortree.h \
+    mcp/mcpserver.h \
     re/bookmarkeventanalyzer.h
 
 FORMS    += ui/candatagrid.ui \
