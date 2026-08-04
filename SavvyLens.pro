@@ -114,7 +114,7 @@ SOURCES += main.cpp\
     re/udsfirmwareuploaderwindow.cpp \
     filterutility.cpp \
     pcaplite.cpp \
-    dbcsignalselectortree.cpp
+    dbcsignalselectortree.cpp \
     mcp/mcpserver.cpp \
     mcp/mcptools_list.cpp \
     mcp/mcptools_call.cpp \
